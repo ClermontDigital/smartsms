@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
 from .const import DOMAIN
+from .data_store import SmartSMSDataStore
 from .webhook import async_register_webhook, async_unregister_webhook
 
 _LOGGER = logging.getLogger(__name__)
@@ -21,12 +22,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up SmartSMS from a config entry."""
     _LOGGER.debug("Setting up SmartSMS integration")
     
-    # Store the config entry data and initialize message storage
+    # Initialize data store
+    data_store = SmartSMSDataStore(hass, entry.entry_id)
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
         "config": entry.data,
         "latest_message": {},
         "message_count": 0,
+        "message_history": [],
+        "data_store": data_store,
     }
     
     # Register the webhook
@@ -42,7 +46,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         identifiers={(DOMAIN, entry.entry_id)},
         manufacturer="SmartSMS",
         name="SMS Gateway",
-        model="Twilio Integration",
+        model="SmartSMS",
     )
     
     _LOGGER.info("SmartSMS integration setup complete")
@@ -60,6 +64,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     
     if unload_ok:
+        # Clean up data store
+        entry_data = hass.data[DOMAIN].get(entry.entry_id, {})
+        data_store = entry_data.get("data_store")
+        if data_store:
+            data_store.cleanup()
+        
         hass.data[DOMAIN].pop(entry.entry_id)
         if not hass.data[DOMAIN]:
             hass.data.pop(DOMAIN)

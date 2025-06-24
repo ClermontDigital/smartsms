@@ -69,7 +69,12 @@ async def handle_webhook(
     hass: HomeAssistant, webhook_id: str, request: web.Request
 ) -> web.Response:
     """Handle incoming SMS webhook from Twilio."""
-    _LOGGER.info("Webhook called with ID: %s", webhook_id)
+    _LOGGER.debug("Webhook called with ID: %s", webhook_id)
+    
+    # Basic security: Check content length
+    if request.content_length and request.content_length > 10000:  # 10KB limit
+        _LOGGER.warning("Webhook payload too large: %s bytes", request.content_length)
+        return web.Response(status=413, text="Payload too large")
     
     try:
         # Find the config entry for this webhook
@@ -101,17 +106,17 @@ async def handle_webhook(
         
         _LOGGER.debug("Received webhook data: %s", data)
         
-        # Skip signature validation for now to debug
-        # auth_token = config_entry.data.get(CONF_AUTH_TOKEN)
-        # if auth_token and not _validate_twilio_signature(request, data, auth_token):
-        #     _LOGGER.warning("Invalid Twilio signature for webhook %s", webhook_id)
-        #     return web.Response(status=403)
+        # Validate Twilio signature for security
+        auth_token = config_entry.data.get(CONF_AUTH_TOKEN)
+        if auth_token and not _validate_twilio_signature(request, data, auth_token):
+            _LOGGER.warning("Invalid Twilio signature for webhook %s", webhook_id)
+            return web.Response(status=403, text="Invalid signature")
         
         # Extract message data
         message_data = _extract_message_data(data)
         if not message_data:
-            _LOGGER.error("Failed to extract message data from webhook")
-            return web.Response(status=400)
+            _LOGGER.error("Failed to extract message data from webhook: %s", data)
+            return web.Response(status=400, text="Invalid message data")
         
         # Apply filters
         if not _should_process_message(config_entry.data, message_data):
@@ -191,8 +196,19 @@ def _extract_message_data(data: dict) -> dict[str, Any] | None:
         message_sid = data.get(TWILIO_MESSAGE_SID, "")
         timestamp = data.get(TWILIO_TIMESTAMP)
         
+        # Validate required fields
         if not body or not sender:
+            _LOGGER.warning("Missing required fields: body=%s, sender=%s", bool(body), bool(sender))
             return None
+        
+        # Basic input validation
+        if len(body) > 1600:  # SMS length limit
+            _LOGGER.warning("Message body too long: %d chars", len(body))
+            body = body[:1600]
+        
+        # Validate phone number format (basic check)
+        if not sender.startswith('+'):
+            _LOGGER.warning("Invalid sender format: %s", sender)
         
         # Parse timestamp or use current time
         timestamp_iso = dt_util.utcnow().isoformat()
@@ -267,12 +283,15 @@ def _check_keywords(keywords: list[str], message_body: str) -> list[str]:
 
 async def _update_entities(hass: HomeAssistant, entry_id: str, message_data: dict) -> None:
     """Update entity states with new message data."""
-    # Store the latest message data
-    hass.data[DOMAIN][entry_id]["latest_message"] = message_data
-    
-    # Increment message count
-    current_count = hass.data[DOMAIN][entry_id].get("message_count", 0)
-    hass.data[DOMAIN][entry_id]["message_count"] = current_count + 1
+    # Use data store for proper message handling
+    data_store = hass.data[DOMAIN][entry_id].get("data_store")
+    if data_store:
+        data_store.store_message(message_data)
+    else:
+        # Fallback to direct storage
+        hass.data[DOMAIN][entry_id]["latest_message"] = message_data
+        current_count = hass.data[DOMAIN][entry_id].get("message_count", 0)
+        hass.data[DOMAIN][entry_id]["message_count"] = current_count + 1
     
     # Trigger entity updates
     async_trigger_entity_updates(hass, entry_id)
