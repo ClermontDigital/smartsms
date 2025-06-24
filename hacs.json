@@ -1,6 +1,8 @@
 {
   "name": "SmartSMS",
   "content_in_root": false,
+  "filename": "smartsms",
+  "domains": ["sensor", "binary_sensor"],
   "render_readme": true,
   "homeassistant": "2024.1.0"
 } 
