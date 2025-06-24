@@ -131,6 +131,7 @@ home-assistant.log*
 # Project specific
 prd.md
 temp.md
+test_webhook.sh
 
 # Testing
 .tox/
