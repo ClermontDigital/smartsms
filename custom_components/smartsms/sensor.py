@@ -83,7 +83,7 @@ class SmartSMSSensor(SensorEntity):
             identifiers={(DOMAIN, entry.entry_id)},
             name="SMS Gateway",
             manufacturer="SmartSMS",
-            model="Twilio Integration",
+            model="SmartSMS",
             configuration_url="https://console.twilio.com/",
         )
 
