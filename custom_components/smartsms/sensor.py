@@ -197,7 +197,7 @@ class SmartSMSWebhookURLSensor(SensorEntity):
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
         """Initialize the sensor."""
         self.hass = hass
-        self.config_entry = config_entry
+        self._config_entry = config_entry
         self._attr_name = f"{config_entry.title} Webhook URL"
         self._attr_unique_id = f"{config_entry.entry_id}_webhook_url"
         self._attr_icon = "mdi:webhook"
@@ -220,7 +220,7 @@ class SmartSMSWebhookURLSensor(SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
-        webhook_id = self.config_entry.data.get(CONF_WEBHOOK_ID)
+        webhook_id = self._config_entry.data.get(CONF_WEBHOOK_ID)
         return {
             "webhook_id": webhook_id,
             "integration": "SmartSMS",
