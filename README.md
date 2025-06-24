@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![HACS Badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
-[![Version](https://img.shields.io/badge/version-0.1.8-green.svg)](https://github.com/ClermontDigital/smartsms)
+[![Version](https://img.shields.io/badge/version-0.2.0-green.svg)](https://github.com/ClermontDigital/smartsms)
 
 SmartSMS is a sophisticated Home Assistant custom integration that transforms your SMS messages into powerful automation triggers. By receiving inbound SMS via Twilio webhooks, SmartSMS exposes each message as Home Assistant entities and enables advanced automation workflows for notifications, smart home responses, and business operations.
 
@@ -87,7 +87,11 @@ SmartSMS is a sophisticated Home Assistant custom integration that transforms yo
 
 1. **Create Twilio Account**: Sign up at [Twilio Console](https://console.twilio.com/)
 2. **Purchase Phone Number**: Buy an SMS-capable phone number in your region
-3. **Locate Credentials**: Find your Account SID and Auth Token in the console dashboard
+3. **Locate Credentials**: Find your Account SID and Auth Token:
+   - **Main Dashboard**: Look for "Account Info" box on the right side
+   - **Account SID**: Starts with `AC...` (34 characters)
+   - **Auth Token**: Click the "eye" icon to reveal (32 characters)
+   - **Alternative**: Console → Account → API keys & tokens
 4. **Note Security**: Keep Auth Token secure - it's used for webhook validation
 
 ### ⚙️ **Step 2: Home Assistant Configuration**
@@ -107,6 +111,7 @@ SmartSMS is a sophisticated Home Assistant custom integration that transforms yo
    - **Keywords**: Watch for specific terms (supports `regex:pattern` syntax)
 
 4. **Copy Webhook URL**: Save the generated webhook URL for Twilio configuration
+   - **Finding Later**: Go to Settings → Devices & Services → SmartSMS → Configure to view the URL again
 
 ### 📞 **Step 3: Twilio Webhook Configuration**
 

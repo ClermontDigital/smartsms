@@ -31,8 +31,8 @@
   "options": {
     "step": {
       "init": {
-        "title": "SmartSMS Options",
-        "description": "Update your SmartSMS configuration",
+        "title": "SmartSMS Configuration",
+        "description": "**Webhook URL:** {webhook_url}\n\nCopy this URL to your Twilio phone number's messaging webhook configuration. You can also update your message filters below.",
         "data": {
           "sender_whitelist": "Sender Whitelist (comma-separated phone numbers)",
           "sender_blacklist": "Sender Blacklist (comma-separated phone numbers)",

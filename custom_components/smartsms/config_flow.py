@@ -9,7 +9,7 @@ from typing import Any
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_NAME
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
@@ -39,6 +39,12 @@ class SmartSMSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         """Initialize the config flow."""
         self.data: dict[str, Any] = {}
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> SmartSMSOptionsFlow:
+        """Create the options flow."""
+        return SmartSMSOptionsFlow(config_entry)
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -164,4 +170,41 @@ class SmartSMSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Get the webhook URL for display."""
         base_url = self.hass.config.external_url or "http://your-home-assistant.local:8123"
         webhook_id = self.data.get(CONF_WEBHOOK_ID, "YOUR_WEBHOOK_ID")
-        return f"{base_url}/api/webhook/{webhook_id}" 
+        return f"{base_url}/api/webhook/{webhook_id}"
+
+
+class SmartSMSOptionsFlow(config_entries.OptionsFlow):
+    """Handle options flow for SmartSMS."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize options flow."""
+        self.config_entry = config_entry
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manage the options."""
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+
+        # Get current webhook URL
+        webhook_id = self.config_entry.data.get(CONF_WEBHOOK_ID)
+        base_url = self.hass.config.external_url or "http://your-home-assistant.local:8123"
+        webhook_url = f"{base_url}/api/webhook/{webhook_id}"
+
+        # Get current filters
+        current_whitelist = ", ".join(self.config_entry.data.get(CONF_SENDER_WHITELIST, []))
+        current_blacklist = ", ".join(self.config_entry.data.get(CONF_SENDER_BLACKLIST, []))
+        current_keywords = ", ".join(self.config_entry.data.get(CONF_KEYWORDS, []))
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema({
+                vol.Optional(CONF_SENDER_WHITELIST, default=current_whitelist): str,
+                vol.Optional(CONF_SENDER_BLACKLIST, default=current_blacklist): str,
+                vol.Optional(CONF_KEYWORDS, default=current_keywords): str,
+            }),
+            description_placeholders={
+                "webhook_url": webhook_url,
+            },
+        ) 
