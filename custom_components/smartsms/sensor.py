@@ -11,7 +11,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 
@@ -201,7 +201,7 @@ class SmartSMSWebhookURLSensor(SensorEntity):
         self._attr_name = f"{config_entry.title} Webhook URL"
         self._attr_unique_id = f"{config_entry.entry_id}_webhook_url"
         self._attr_icon = "mdi:webhook"
-        self._attr_entity_category = "diagnostic"
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
         
         # Set up device info
         self._attr_device_info = DeviceInfo(
