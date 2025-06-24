@@ -72,8 +72,9 @@ async def handle_webhook(
     _LOGGER.debug("Webhook called with ID: %s", webhook_id)
     
     # Basic security: Check content length
-    if request.content_length and request.content_length > 10000:  # 10KB limit
-        _LOGGER.warning("Webhook payload too large: %s bytes", request.content_length)
+    content_length = getattr(request, 'content_length', None)
+    if content_length and content_length > 10000:  # 10KB limit
+        _LOGGER.warning("Webhook payload too large: %s bytes", content_length)
         return web.Response(status=413, text="Payload too large")
     
     try:
