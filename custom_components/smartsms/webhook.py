@@ -95,40 +95,60 @@ async def handle_webhook(
             ])
             return web.Response(status=404)
         
-        # Get request body text first (can only be consumed once)
-        body_text = await request.text()
-        _LOGGER.info("Raw body text: %s", body_text)
         _LOGGER.info("Content type: %s", request.content_type)
         _LOGGER.info("Request headers: %s", dict(request.headers))
         
+        # Parse request data - try different methods since Nabu Casa may transform the request
+        data = {}
+        body_text = ""
+        
+        # Method 1: Try aiohttp's post() method first (handles form data properly)
+        try:
+            _LOGGER.info("Attempting aiohttp post() parsing")
+            form_data = await request.post()
+            data = dict(form_data)
+            _LOGGER.info("Successfully parsed with aiohttp post(): %s", data)
+            if data and any(data.values()):  # Check if we got meaningful data
+                # Get body text for signature validation if needed
+                # Note: This is a workaround since we can't re-read the stream
+                body_text = "&".join([f"{k}={v}" for k, v in data.items()])
+            else:
+                raise ValueError("Empty form data from post()")
+        except Exception as e:
+            _LOGGER.info("aiohttp post() parsing failed: %s", e)
+            
+            # Method 2: Get raw body text and parse manually
+            try:
+                _LOGGER.info("Attempting manual body text parsing")
+                body_text = await request.text()
+                _LOGGER.info("Raw body text: %s", body_text)
+                
+                # Try parsing as form data
+                from urllib.parse import parse_qs
+                parsed_data = parse_qs(body_text)
+                _LOGGER.info("Manual form parsing result: %s", parsed_data)
+                
+                if parsed_data:
+                    # Convert lists to single values (Twilio sends single values)
+                    data = {k: v[0] if v else '' for k, v in parsed_data.items()}
+                    _LOGGER.info("Successfully parsed as form data manually")
+                else:
+                    # Try JSON parsing
+                    import json
+                    data = json.loads(body_text)
+                    _LOGGER.info("Successfully parsed as JSON")
+                    
+            except Exception as e2:
+                _LOGGER.error("All parsing methods failed: %s", e2)
+                return web.Response(status=400, text="Unable to parse request data")
+        
         # Validate Twilio signature for security (temporarily disabled for debugging)
         auth_token = config_entry.data.get(CONF_AUTH_TOKEN)
-        if False and auth_token and not _validate_twilio_signature(request, body_text, auth_token):
+        if False and auth_token and body_text and not _validate_twilio_signature(request, body_text, auth_token):
             _LOGGER.warning("Invalid Twilio signature for webhook %s", webhook_id)
             return web.Response(status=403, text="Invalid signature")
         else:
             _LOGGER.info("Signature validation disabled for debugging")
-        
-        # Parse form data from the body text
-        if request.content_type == "application/x-www-form-urlencoded":
-            # Parse URL-encoded form data manually
-            from urllib.parse import parse_qs
-            _LOGGER.info("Parsing as form data")
-            parsed_data = parse_qs(body_text)
-            _LOGGER.info("Parsed data: %s", parsed_data)
-            # Convert lists to single values (Twilio sends single values)
-            data = {k: v[0] if v else '' for k, v in parsed_data.items()}
-        else:
-            try:
-                import json
-                _LOGGER.info("Trying to parse as JSON")
-                data = json.loads(body_text)
-            except Exception as e:
-                _LOGGER.info("JSON parsing failed: %s, falling back to form data", e)
-                # Fallback: try to parse as form data
-                from urllib.parse import parse_qs
-                parsed_data = parse_qs(body_text)
-                data = {k: v[0] if v else '' for k, v in parsed_data.items()}
         
         _LOGGER.info("Final processed data: %s", data)
         
@@ -141,10 +161,11 @@ async def handle_webhook(
         
         _LOGGER.info("Extracted message data: %s", message_data)
         
-        # Apply filters
+        # Apply filters (be more lenient during debugging)
         if not _should_process_message(config_entry.data, message_data):
-            _LOGGER.debug("Message filtered out: %s", message_data[ATTR_SENDER])
-            return web.Response(status=200, text="Message filtered")
+            _LOGGER.info("Message filtered out: %s", message_data[ATTR_SENDER])
+            # Still process for debugging purposes
+            _LOGGER.info("Processing anyway for debugging")
         
         # Check for keyword matches
         matched_keywords = _check_keywords(
@@ -222,49 +243,83 @@ def _validate_twilio_signature(request: web.Request, body: str, auth_token: str)
 def _extract_message_data(data: dict) -> dict[str, Any] | None:
     """Extract message data from Twilio webhook payload."""
     try:
+        _LOGGER.info("=== EXTRACTING MESSAGE DATA ===")
+        _LOGGER.info("Available data keys: %s", list(data.keys()))
+        
         body = data.get(TWILIO_BODY, "")
         sender = data.get(TWILIO_FROM, "")
         to_number = data.get(TWILIO_TO, "")
         message_sid = data.get(TWILIO_MESSAGE_SID, "")
         timestamp = data.get(TWILIO_TIMESTAMP)
         
-        # Validate required fields
+        _LOGGER.info("Extracted fields:")
+        _LOGGER.info("  body: %s", body)
+        _LOGGER.info("  sender: %s", sender)
+        _LOGGER.info("  to_number: %s", to_number)
+        _LOGGER.info("  message_sid: %s", message_sid)
+        _LOGGER.info("  timestamp: %s", timestamp)
+        
+        # Validate required fields - be more lenient for debugging
+        if not body:
+            _LOGGER.warning("Missing message body")
+            body = data.get("Message", data.get("Text", ""))  # Try alternative field names
+            
+        if not sender:
+            _LOGGER.warning("Missing sender")
+            sender = data.get("FromNumber", data.get("Phone", ""))  # Try alternative field names
+            
         if not body or not sender:
-            _LOGGER.warning("Missing required fields: body=%s, sender=%s", bool(body), bool(sender))
-            return None
+            _LOGGER.error("Still missing required fields after fallback: body='%s', sender='%s'", body, sender)
+            _LOGGER.error("Available data keys: %s", list(data.keys()))
+            # Don't return None yet - let's see what we have
         
         # Basic input validation
-        if len(body) > 1600:  # SMS length limit
+        if body and len(body) > 1600:  # SMS length limit
             _LOGGER.warning("Message body too long: %d chars", len(body))
             body = body[:1600]
         
-        # Validate phone number format (basic check)
-        if not sender.startswith('+'):
-            _LOGGER.warning("Invalid sender format: %s", sender)
+        # Validate phone number format (basic check) - be more lenient
+        if sender and not sender.startswith('+'):
+            _LOGGER.info("Sender doesn't start with +, but continuing: %s", sender)
         
-        # Parse timestamp or use current time
+        # Parse timestamp - try multiple possible field names
         timestamp_iso = dt_util.utcnow().isoformat()
-        if timestamp:
-            try:
-                # Try multiple timestamp formats
-                for fmt in ["%Y-%m-%d %H:%M:%S", "%a, %d %b %Y %H:%M:%S %z"]:
-                    try:
-                        parsed_timestamp = datetime.strptime(timestamp, fmt)
-                        timestamp_iso = parsed_timestamp.isoformat()
-                        break
-                    except ValueError:
-                        continue
-            except Exception:
-                pass  # Use current time as fallback
+        timestamp_fields = [TWILIO_TIMESTAMP, "DateCreated", "DateUpdated", "timestamp", "time"]
         
-        return {
-            ATTR_BODY: body,
-            ATTR_SENDER: sender,
-            ATTR_TO_NUMBER: to_number,
-            ATTR_MESSAGE_SID: message_sid,
+        for field in timestamp_fields:
+            timestamp = data.get(field)
+            if timestamp:
+                _LOGGER.info("Found timestamp in field '%s': %s", field, timestamp)
+                try:
+                    # Try multiple timestamp formats
+                    for fmt in [
+                        "%Y-%m-%d %H:%M:%S",
+                        "%a, %d %b %Y %H:%M:%S %z",
+                        "%Y-%m-%dT%H:%M:%S.%fZ",
+                        "%Y-%m-%dT%H:%M:%SZ"
+                    ]:
+                        try:
+                            parsed_timestamp = datetime.strptime(timestamp, fmt)
+                            timestamp_iso = parsed_timestamp.isoformat()
+                            _LOGGER.info("Successfully parsed timestamp: %s", timestamp_iso)
+                            break
+                        except ValueError:
+                            continue
+                    break
+                except Exception as e:
+                    _LOGGER.warning("Failed to parse timestamp '%s': %s", timestamp, e)
+        
+        result = {
+            ATTR_BODY: body or "",
+            ATTR_SENDER: sender or "",
+            ATTR_TO_NUMBER: to_number or "",
+            ATTR_MESSAGE_SID: message_sid or "",
             ATTR_TIMESTAMP: timestamp_iso,
             ATTR_PROVIDER: "twilio",
         }
+        
+        _LOGGER.info("Final extracted message data: %s", result)
+        return result
         
     except Exception as err:
         _LOGGER.error("Error extracting message data: %s", err)

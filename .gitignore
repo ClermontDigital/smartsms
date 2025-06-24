@@ -130,6 +130,7 @@ home-assistant.log*
 
 # Project specific
 prd.md
+logs/
 temp.md
 test_webhook.sh
 
