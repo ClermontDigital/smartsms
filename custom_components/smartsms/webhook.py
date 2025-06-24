@@ -92,26 +92,33 @@ async def handle_webhook(
             ])
             return web.Response(status=404)
         
-        # Get request data
-        content_type = getattr(request, 'content_type', None)
-        if content_type == "application/x-www-form-urlencoded":
-            form_data = await request.post()
-            data = dict(form_data)
-        else:
-            try:
-                data = await request.json()
-            except Exception:
-                # Fallback to form data if JSON parsing fails
-                form_data = await request.post()
-                data = dict(form_data)
+        # Get request body text first (can only be consumed once)
+        body_text = await request.text()
         
-        _LOGGER.info("Received webhook data: %s", data)
-        
-        # Validate Twilio signature for security (temporarily disabled for testing)
+        # Validate Twilio signature for security
         auth_token = config_entry.data.get(CONF_AUTH_TOKEN)
-        if False and auth_token and not _validate_twilio_signature(request, data, auth_token):
+        if auth_token and not _validate_twilio_signature(request, body_text, auth_token):
             _LOGGER.warning("Invalid Twilio signature for webhook %s", webhook_id)
             return web.Response(status=403, text="Invalid signature")
+        
+        # Parse form data from the body text
+        if request.content_type == "application/x-www-form-urlencoded":
+            # Parse URL-encoded form data manually
+            from urllib.parse import parse_qs
+            parsed_data = parse_qs(body_text)
+            # Convert lists to single values (Twilio sends single values)
+            data = {k: v[0] if v else '' for k, v in parsed_data.items()}
+        else:
+            try:
+                import json
+                data = json.loads(body_text)
+            except Exception:
+                # Fallback: try to parse as form data
+                from urllib.parse import parse_qs
+                parsed_data = parse_qs(body_text)
+                data = {k: v[0] if v else '' for k, v in parsed_data.items()}
+        
+        _LOGGER.info("Received webhook data: %s", data)
         
         # Extract message data
         _LOGGER.info("Extracting message data from: %s", data)
@@ -162,21 +169,19 @@ async def handle_webhook(
         return web.Response(status=500)
 
 
-def _validate_twilio_signature(request: web.Request, data: dict, auth_token: str) -> bool:
+def _validate_twilio_signature(request: web.Request, body: str, auth_token: str) -> bool:
     """Validate Twilio webhook signature."""
     try:
         signature = request.headers.get("X-Twilio-Signature")
         if not signature:
+            _LOGGER.warning("No X-Twilio-Signature header found")
             return False
         
-        # Build the URL (Twilio uses the full URL for signature calculation)
+        # Get the full URL (Twilio uses the full URL for signature calculation)
         url = str(request.url)
         
-        # Sort form data for signature calculation
-        sorted_data = sorted(data.items())
-        body = "&".join([f"{k}={v}" for k, v in sorted_data])
-        
-        # Calculate expected signature
+        # Calculate expected signature using Twilio's method
+        # URL + body (for POST data, this is the form-encoded body)
         expected_signature = base64.b64encode(
             hmac.new(
                 auth_token.encode("utf-8"),
@@ -185,7 +190,16 @@ def _validate_twilio_signature(request: web.Request, data: dict, auth_token: str
             ).digest()
         ).decode()
         
-        return hmac.compare_digest(signature, expected_signature)
+        is_valid = hmac.compare_digest(signature, expected_signature)
+        if not is_valid:
+            _LOGGER.warning(
+                "Signature validation failed. Expected: %s, Got: %s", 
+                expected_signature, signature
+            )
+        else:
+            _LOGGER.debug("Twilio signature validation successful")
+        
+        return is_valid
         
     except Exception as err:
         _LOGGER.error("Error validating Twilio signature: %s", err)
