@@ -104,7 +104,7 @@ async def handle_webhook(
                 form_data = await request.post()
                 data = dict(form_data)
         
-        _LOGGER.debug("Received webhook data: %s", data)
+        _LOGGER.info("Received webhook data: %s", data)
         
         # Validate Twilio signature for security (temporarily disabled for testing)
         auth_token = config_entry.data.get(CONF_AUTH_TOKEN)
@@ -113,10 +113,13 @@ async def handle_webhook(
             return web.Response(status=403, text="Invalid signature")
         
         # Extract message data
+        _LOGGER.info("Extracting message data from: %s", data)
         message_data = _extract_message_data(data)
         if not message_data:
             _LOGGER.error("Failed to extract message data from webhook: %s", data)
             return web.Response(status=400, text="Invalid message data")
+        
+        _LOGGER.info("Extracted message data: %s", message_data)
         
         # Apply filters
         if not _should_process_message(config_entry.data, message_data):
@@ -144,6 +147,7 @@ async def handle_webhook(
         )
         
         # Update entities
+        _LOGGER.info("Updating entities for entry: %s", config_entry.entry_id)
         await _update_entities(hass, config_entry.entry_id, message_data)
         
         _LOGGER.info("Processed SMS from %s: %s", 
@@ -283,17 +287,22 @@ def _check_keywords(keywords: list[str], message_body: str) -> list[str]:
 
 async def _update_entities(hass: HomeAssistant, entry_id: str, message_data: dict) -> None:
     """Update entity states with new message data."""
+    _LOGGER.info("Starting entity update for entry: %s", entry_id)
+    
     # Use data store for proper message handling
     data_store = hass.data[DOMAIN][entry_id].get("data_store")
     if data_store:
+        _LOGGER.info("Using data store to store message")
         data_store.store_message(message_data)
     else:
         # Fallback to direct storage
+        _LOGGER.info("Using fallback direct storage")
         hass.data[DOMAIN][entry_id]["latest_message"] = message_data
         current_count = hass.data[DOMAIN][entry_id].get("message_count", 0)
         hass.data[DOMAIN][entry_id]["message_count"] = current_count + 1
     
     # Trigger entity updates
+    _LOGGER.info("Triggering entity updates")
     async_trigger_entity_updates(hass, entry_id)
 
 
