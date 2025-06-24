@@ -1,0 +1,44 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "SmartSMS Setup",
+        "description": "Configure your Twilio account for SMS reception",
+        "data": {
+          "name": "Integration Name",
+          "account_sid": "Twilio Account SID", 
+          "auth_token": "Twilio Auth Token"
+        }
+      },
+      "filters": {
+        "title": "Message Filters",
+        "description": "Configure optional message filtering. Your webhook URL is: **{webhook_url}** - copy this to your Twilio console.",
+        "data": {
+          "sender_whitelist": "Sender Whitelist (comma-separated phone numbers)",
+          "sender_blacklist": "Sender Blacklist (comma-separated phone numbers)", 
+          "keywords": "Keywords to watch (comma-separated, use 'regex:pattern' for regex)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid Twilio credentials. Please check your Account SID and Auth Token.",
+      "unknown": "Unexpected error occurred. Please try again."
+    },
+    "abort": {
+      "already_configured": "This Twilio account is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "SmartSMS Options",
+        "description": "Update your SmartSMS configuration",
+        "data": {
+          "sender_whitelist": "Sender Whitelist (comma-separated phone numbers)",
+          "sender_blacklist": "Sender Blacklist (comma-separated phone numbers)",
+          "keywords": "Keywords to watch (comma-separated, use 'regex:pattern' for regex)"
+        }
+      }
+    }
+  }
+} 

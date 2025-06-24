@@ -1,0 +1,13 @@
+{
+  "domain": "smartsms",
+  "name": "SmartSMS",
+  "codeowners": ["@developersteve"],
+  "config_flow": true,
+  "dependencies": ["webhook"],
+  "documentation": "https://github.com/ClermontDigital/smartsms",
+  "integration_type": "service",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/ClermontDigital/smartsms/issues",
+  "requirements": ["twilio>=8.0.0"],
+  "version": "0.1.0"
+} 
