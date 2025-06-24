@@ -58,13 +58,18 @@ async def async_register_webhook(hass: HomeAssistant, entry: ConfigEntry) -> Non
     _LOGGER.error("🔧 Entry title: %s", entry.title)
     
     try:
-        # Check if webhook is already registered
-        if hasattr(hass.data.get('webhook', {}), '_handlers'):
-            existing_handlers = hass.data['webhook']._handlers
+        # Check webhook system availability
+        webhook_component = hass.data.get('webhook')
+        _LOGGER.error("🔧 Webhook component available: %s", webhook_component is not None)
+        
+        if webhook_component and hasattr(webhook_component, '_handlers'):
+            existing_handlers = webhook_component._handlers
             _LOGGER.error("🔧 Existing webhook handlers: %s", list(existing_handlers.keys()))
             if webhook_id in existing_handlers:
                 _LOGGER.error("🔧 WARNING: Webhook ID already exists!")
         
+        # Register webhook with detailed logging
+        _LOGGER.error("🔧 Calling webhook.async_register...")
         webhook.async_register(
             hass,
             DOMAIN,
@@ -72,25 +77,33 @@ async def async_register_webhook(hass: HomeAssistant, entry: ConfigEntry) -> Non
             webhook_id,
             handle_webhook,
         )
+        _LOGGER.error("🔧 webhook.async_register completed")
         
         # Store mapping for efficient lookup
         _WEBHOOK_TO_ENTRY[webhook_id] = entry.entry_id
+        _LOGGER.error("🔧 Added to mapping: %s -> %s", webhook_id, entry.entry_id)
         
         # Verify registration worked
-        if hasattr(hass.data.get('webhook', {}), '_handlers'):
-            handlers_after = hass.data['webhook']._handlers
+        webhook_component_after = hass.data.get('webhook')
+        if webhook_component_after and hasattr(webhook_component_after, '_handlers'):
+            handlers_after = webhook_component_after._handlers
             _LOGGER.error("🔧 Handlers after registration: %s", list(handlers_after.keys()))
             if webhook_id in handlers_after:
                 _LOGGER.error("🔧 ✅ WEBHOOK SUCCESSFULLY REGISTERED!")
                 handler_info = handlers_after[webhook_id]
-                _LOGGER.error("🔧 Handler info: %s", handler_info)
+                _LOGGER.error("🔧 Handler info - domain: %s, name: %s", 
+                            getattr(handler_info, 'domain', 'unknown'),
+                            getattr(handler_info, 'name', 'unknown'))
             else:
                 _LOGGER.error("🔧 ❌ WEBHOOK REGISTRATION FAILED - NOT IN HANDLERS!")
         
+        # Final verification - test if our mapping is working
+        _LOGGER.error("🔧 Final webhook mapping: %s", _WEBHOOK_TO_ENTRY)
         _LOGGER.error("🔧 WEBHOOK REGISTRATION COMPLETE")
         
     except Exception as err:
         _LOGGER.error("🔧 ❌ WEBHOOK REGISTRATION EXCEPTION: %s", err)
+        _LOGGER.exception("Full exception traceback:")
         raise
 
 
@@ -119,6 +132,15 @@ async def handle_webhook(
     _LOGGER.error("🚀 Request method: %s", request.method)
     _LOGGER.error("🚀 Request URL: %s", request.url)
     _LOGGER.error("🚀 Request headers: %s", dict(request.headers))
+    _LOGGER.error("🚀 All webhook mappings: %s", _WEBHOOK_TO_ENTRY)
+    
+    # Fire a test event to see if this handler is being called at all
+    hass.bus.async_fire("smartsms_webhook_test", {
+        "webhook_id": webhook_id,
+        "method": request.method,
+        "url": str(request.url),
+        "timestamp": dt_util.utcnow().isoformat()
+    })
     
     try:
         # Security check: payload size limit

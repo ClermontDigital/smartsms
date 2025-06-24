@@ -63,7 +63,6 @@ async def async_setup_entry(
     sensors = [
         SmartSMSSensor(entry, description) for description in SENSOR_DESCRIPTIONS
     ]
-    sensors.append(SmartSMSWebhookURLSensor(hass, entry))
     
     async_add_entities(sensors)
 
@@ -189,40 +188,3 @@ class SmartSMSSensor(SensorEntity):
         # The sensor gets updated via the webhook handler and data events
         # This method is called by HA's update cycle
         pass 
-
-
-class SmartSMSWebhookURLSensor(SensorEntity):
-    """Diagnostic sensor showing the webhook URL."""
-
-    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-        """Initialize the sensor."""
-        self.hass = hass
-        self._config_entry = config_entry
-        self._attr_name = f"{config_entry.title} Webhook URL"
-        self._attr_unique_id = f"{config_entry.entry_id}_webhook_url"
-        self._attr_icon = "mdi:webhook"
-        self._attr_entity_category = EntityCategory.DIAGNOSTIC
-        
-        # Set up device info
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, config_entry.entry_id)},
-            name="SMS Gateway",
-            manufacturer="SmartSMS",
-            model="SmartSMS",
-            configuration_url="https://console.twilio.com/",
-        )
-        
-        # Generate the webhook URL
-        webhook_id = config_entry.data.get(CONF_WEBHOOK_ID)
-        base_url = hass.config.external_url or "http://your-home-assistant.local:8123"
-        self._attr_native_value = f"{base_url}/api/webhook/{webhook_id}"
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return extra state attributes."""
-        webhook_id = self._config_entry.data.get(CONF_WEBHOOK_ID)
-        return {
-            "webhook_id": webhook_id,
-            "integration": "SmartSMS",
-            "setup_instructions": "Copy this URL to your Twilio phone number's messaging webhook configuration",
-        } 
