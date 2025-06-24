@@ -130,6 +130,7 @@ home-assistant.log*
 
 # Project specific
 prd.md
+temp.md
 
 # Testing
 .tox/

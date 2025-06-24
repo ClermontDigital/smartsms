@@ -89,13 +89,15 @@ async def handle_webhook(
         # Get request data
         content_type = getattr(request, 'content_type', None)
         if content_type == "application/x-www-form-urlencoded":
-            data = dict(await request.post())
+            form_data = await request.post()
+            data = dict(form_data)
         else:
             try:
                 data = await request.json()
             except Exception:
                 # Fallback to form data if JSON parsing fails
-                data = dict(await request.post())
+                form_data = await request.post()
+                data = dict(form_data)
         
         _LOGGER.debug("Received webhook data: %s", data)
         
