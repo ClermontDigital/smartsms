@@ -12,7 +12,7 @@ from typing import Any
 from aiohttp import web
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import webhook
+from homeassistant.components import webhook
 from homeassistant.util import dt as dt_util
 
 from .const import (

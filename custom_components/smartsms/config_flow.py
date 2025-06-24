@@ -11,7 +11,6 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
-from homeassistant.helpers import aiohttp_client
 
 from .const import (
     CONF_ACCOUNT_SID,
