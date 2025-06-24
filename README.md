@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![HACS Badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
 [![GitHub Release](https://img.shields.io/github/release/ClermontDigital/smartsms.svg)](https://github.com/ClermontDigital/smartsms/releases)
-[![Version](https://img.shields.io/badge/version-0.1.0-green.svg)](https://github.com/ClermontDigital/smartsms)
+[![Version](https://img.shields.io/badge/version-0.1.6-green.svg)](https://github.com/ClermontDigital/smartsms)
 
 SmartSMS is a sophisticated Home Assistant custom integration that transforms your SMS messages into powerful automation triggers. By receiving inbound SMS via Twilio webhooks, SmartSMS exposes each message as Home Assistant entities and enables advanced automation workflows for notifications, smart home responses, and business operations.
 
