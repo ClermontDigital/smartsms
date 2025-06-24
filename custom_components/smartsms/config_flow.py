@@ -178,7 +178,7 @@ class SmartSMSOptionsFlow(config_entries.OptionsFlow):
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize options flow."""
-        self.config_entry = config_entry
+        self._config_entry = config_entry
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -188,14 +188,14 @@ class SmartSMSOptionsFlow(config_entries.OptionsFlow):
             return self.async_create_entry(title="", data=user_input)
 
         # Get current webhook URL
-        webhook_id = self.config_entry.data.get(CONF_WEBHOOK_ID)
+        webhook_id = self._config_entry.data.get(CONF_WEBHOOK_ID)
         base_url = self.hass.config.external_url or "http://your-home-assistant.local:8123"
         webhook_url = f"{base_url}/api/webhook/{webhook_id}"
 
         # Get current filters
-        current_whitelist = ", ".join(self.config_entry.data.get(CONF_SENDER_WHITELIST, []))
-        current_blacklist = ", ".join(self.config_entry.data.get(CONF_SENDER_BLACKLIST, []))
-        current_keywords = ", ".join(self.config_entry.data.get(CONF_KEYWORDS, []))
+        current_whitelist = ", ".join(self._config_entry.data.get(CONF_SENDER_WHITELIST, []))
+        current_blacklist = ", ".join(self._config_entry.data.get(CONF_SENDER_BLACKLIST, []))
+        current_keywords = ", ".join(self._config_entry.data.get(CONF_KEYWORDS, []))
 
         return self.async_show_form(
             step_id="init",

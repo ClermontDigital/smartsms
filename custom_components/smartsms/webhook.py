@@ -69,6 +69,8 @@ async def handle_webhook(
     hass: HomeAssistant, webhook_id: str, request: web.Request
 ) -> web.Response:
     """Handle incoming SMS webhook from Twilio."""
+    _LOGGER.info("Webhook called with ID: %s", webhook_id)
+    
     try:
         # Find the config entry for this webhook
         config_entry = None
@@ -79,13 +81,21 @@ async def handle_webhook(
         
         if not config_entry:
             _LOGGER.error("No config entry found for webhook ID: %s", webhook_id)
+            _LOGGER.debug("Available entries: %s", [
+                entry.data.get(CONF_WEBHOOK_ID) for entry in hass.config_entries.async_entries(DOMAIN)
+            ])
             return web.Response(status=404)
         
         # Get request data
-        if request.content_type == "application/x-www-form-urlencoded":
+        content_type = getattr(request, 'content_type', None)
+        if content_type == "application/x-www-form-urlencoded":
             data = dict(await request.post())
         else:
-            data = await request.json()
+            try:
+                data = await request.json()
+            except Exception:
+                # Fallback to form data if JSON parsing fails
+                data = dict(await request.post())
         
         _LOGGER.debug("Received webhook data: %s", data)
         
