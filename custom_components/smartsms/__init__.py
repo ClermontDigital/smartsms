@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+import asyncio
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -36,8 +37,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "data_store": data_store,
         }
         
-        # Register the webhook before setting up platforms
-        await async_register_webhook(hass, entry)
+        # Wait for webhook component to be fully ready, then register webhook
+        await _ensure_webhook_ready_and_register(hass, entry)
         
         # Setup platforms
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -62,6 +63,37 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if entry.entry_id in hass.data.get(DOMAIN, {}):
             hass.data[DOMAIN].pop(entry.entry_id)
         raise ConfigEntryNotReady(f"Failed to set up SmartSMS: {err}") from err
+
+
+async def _ensure_webhook_ready_and_register(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Ensure webhook component is ready and register webhook with retries."""
+    max_retries = 10
+    retry_delay = 1.0  # seconds
+    
+    for attempt in range(max_retries):
+        try:
+            # Check if webhook component is properly loaded
+            webhook_component = hass.data.get('webhook')
+            _LOGGER.error("🔧 Attempt %d: Webhook component check: %s", attempt + 1, webhook_component is not None)
+            
+            if webhook_component and hasattr(webhook_component, '_handlers'):
+                _LOGGER.error("🔧 Webhook component ready! Registering webhook...")
+                await async_register_webhook(hass, entry)
+                return
+            
+            if attempt < max_retries - 1:
+                _LOGGER.error("🔧 Webhook component not ready, waiting %.1fs (attempt %d/%d)", retry_delay, attempt + 1, max_retries)
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 1.5  # Exponential backoff
+            else:
+                _LOGGER.error("🔧 Webhook component still not ready after %d attempts, proceeding anyway", max_retries)
+                await async_register_webhook(hass, entry)
+                
+        except Exception as err:
+            if attempt == max_retries - 1:
+                raise
+            _LOGGER.warning("🔧 Webhook registration attempt %d failed: %s, retrying...", attempt + 1, err)
+            await asyncio.sleep(retry_delay)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
