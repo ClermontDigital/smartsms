@@ -1,0 +1,8 @@
+{
+  "name": "SmartSMS",
+  "content_in_root": false,
+  "filename": "smartsms.zip",
+  "render_readme": true,
+  "zip_release": true,
+  "homeassistant": "2024.1.0"
+} 
