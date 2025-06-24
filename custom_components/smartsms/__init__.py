@@ -21,9 +21,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up SmartSMS from a config entry."""
     _LOGGER.debug("Setting up SmartSMS integration")
     
-    # Store the config entry data
+    # Store the config entry data and initialize message storage
     hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = entry.data
+    hass.data[DOMAIN][entry.entry_id] = {
+        "config": entry.data,
+        "latest_message": {},
+        "message_count": 0,
+    }
     
     # Register the webhook
     await async_register_webhook(hass, entry)

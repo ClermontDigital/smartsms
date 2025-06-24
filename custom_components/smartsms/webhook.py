@@ -267,13 +267,6 @@ def _check_keywords(keywords: list[str], message_body: str) -> list[str]:
 
 async def _update_entities(hass: HomeAssistant, entry_id: str, message_data: dict) -> None:
     """Update entity states with new message data."""
-    # Store message data for entities to access
-    if DOMAIN not in hass.data:
-        hass.data[DOMAIN] = {}
-    
-    if entry_id not in hass.data[DOMAIN]:
-        hass.data[DOMAIN][entry_id] = {}
-    
     # Store the latest message data
     hass.data[DOMAIN][entry_id]["latest_message"] = message_data
     
