@@ -11,7 +11,7 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
-
+from homeassistant.helpers import aiohttp_client
 
 from .const import (
     CONF_ACCOUNT_SID,
@@ -26,6 +26,10 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class InvalidCredentials(Exception):
+    """Exception to indicate invalid credentials."""
 
 
 class SmartSMSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -161,8 +165,4 @@ class SmartSMSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Get the webhook URL for display."""
         base_url = self.hass.config.external_url or "http://your-home-assistant.local:8123"
         webhook_id = self.data.get(CONF_WEBHOOK_ID, "YOUR_WEBHOOK_ID")
-        return f"{base_url}/api/webhook/{webhook_id}"
-
-
-class InvalidCredentials(Exception):
-    """Exception to indicate invalid credentials.""" 
+        return f"{base_url}/api/webhook/{webhook_id}" 
