@@ -9,62 +9,57 @@ from twilio.rest import Client
 
 
 def _sanitize_message_text(text: str) -> str:
-    """Sanitize text to prevent markdown formatting issues in Home Assistant UI."""
+    """Clean SMS message body by keeping ONLY printable ASCII characters."""
     if not text:
         return text
     
-    import html
     import re
+    import html
     
-    # First normalize whitespace and line breaks
-    sanitized = text.strip()
+    _LOGGER.debug("POLLING ORIGINAL SMS BODY: %r (len=%d)", text, len(text))
     
-    # Replace various types of line breaks and carriage returns
-    sanitized = sanitized.replace('\r\n', ' ')  # Windows line endings
-    sanitized = sanitized.replace('\r', ' ')    # Mac line endings  
-    sanitized = sanitized.replace('\n', ' ')    # Unix line endings
-    sanitized = sanitized.replace('\t', ' ')    # Tabs
-    
-    # Collapse multiple spaces into single spaces
-    sanitized = re.sub(r'\s+', ' ', sanitized)
-    
-    # HTML decode first in case Twilio is sending encoded content
+    # Step 1: Handle URL decoding if needed (defensive)
     try:
-        sanitized = html.unescape(sanitized)
-    except:
-        pass  # If it fails, continue with original
+        from urllib.parse import unquote_plus
+        if '%' in text and re.search(r'%[0-9A-Fa-f]{2}', text):
+            text = unquote_plus(text)
+            _LOGGER.debug("POLLING URL decoded: %r", text)
+    except Exception:
+        pass
     
-    # Replace ALL possible markdown characters with safe alternatives
-    replacements = {
-        '*': '∗',   # Mathematical asterisk (U+2217)
-        '_': '＿',   # Fullwidth low line (U+FF3F)
-        '`': '′',   # Prime symbol (U+2032)
-        '~': '∼',   # Tilde operator (U+223C)
-        '#': '＃',  # Fullwidth number sign (U+FF03)
-        '[': '［',  # Fullwidth left square bracket (U+FF3B)
-        ']': '］',  # Fullwidth right square bracket (U+FF3D)
-        '(': '（',  # Fullwidth left parenthesis (U+FF08)
-        ')': '）',  # Fullwidth right parenthesis (U+FF09)
-        '{': '｛',  # Fullwidth left curly bracket (U+FF5B)
-        '}': '｝',  # Fullwidth right curly bracket (U+FF5D)
-        '+': '＋',  # Fullwidth plus sign (U+FF0B)
-        '-': '－',  # Fullwidth hyphen-minus (U+FF0D)
-        '=': '＝',  # Fullwidth equals sign (U+FF1D)
-        '!': '！',  # Fullwidth exclamation mark (U+FF01)
-        '|': '｜',  # Fullwidth vertical line (U+FF5C)
-        '\\': '＼', # Fullwidth reverse solidus (U+FF3C)
-        '^': '＾',  # Fullwidth circumflex accent (U+FF3E)
-        '>': '＞',  # Fullwidth greater-than sign (U+FF1E)
-        '<': '＜',  # Fullwidth less-than sign (U+FF1C)
-    }
+    # Step 2: HTML entity decoding
+    try:
+        text = html.unescape(text)
+        _LOGGER.debug("POLLING HTML unescaped: %r", text)
+    except Exception:
+        pass
     
-    for char, replacement in replacements.items():
-        sanitized = sanitized.replace(char, replacement)
+    # Step 3: AGGRESSIVE ASCII-ONLY FILTERING
+    # Keep only printable ASCII characters (32-126) plus space (32)
+    # This removes ALL Unicode, control chars, and invisible characters
+    ascii_chars = []
+    for char in text:
+        char_code = ord(char)
+        if 32 <= char_code <= 126:  # Printable ASCII range
+            ascii_chars.append(char)
+        elif char_code == 9:  # Tab -> space
+            ascii_chars.append(' ')
+        elif char_code in (10, 13):  # LF, CR -> space
+            ascii_chars.append(' ')
+        else:
+            # Log what we're removing for debugging
+            _LOGGER.debug("POLLING REMOVED non-ASCII char: %r (code=%d)", char, char_code)
     
-    # Final HTML escape for any remaining problematic characters
-    sanitized = html.escape(sanitized)
+    clean_body = ''.join(ascii_chars)
+    _LOGGER.debug("POLLING ASCII-only result: %r", clean_body)
     
-    return sanitized.strip()
+    # Step 4: Normalize whitespace
+    clean_body = re.sub(r'\s+', ' ', clean_body)
+    clean_body = clean_body.strip()
+    
+    _LOGGER.debug("POLLING FINAL CLEANED: %r (len=%d)", clean_body, len(clean_body))
+    
+    return clean_body
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
