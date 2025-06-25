@@ -7,6 +7,27 @@ import asyncio
 from datetime import datetime, timezone, timedelta
 from twilio.rest import Client
 
+
+def _sanitize_message_text(text: str) -> str:
+    """Sanitize text to prevent markdown formatting issues in Home Assistant UI."""
+    if not text:
+        return text
+    
+    # Use HTML entities to prevent markdown interpretation
+    # This should work better with Home Assistant's UI rendering
+    import html
+    
+    # First HTML escape the text
+    sanitized = html.escape(text)
+    
+    # Then replace remaining problematic characters with safe alternatives
+    # Using visually similar Unicode characters that won't trigger markdown
+    sanitized = sanitized.replace('*', '•')  # Bullet point instead of asterisk
+    sanitized = sanitized.replace('_', '—')  # Em dash instead of underscore
+    sanitized = sanitized.replace('`', "'")  # Single quote instead of backtick
+    
+    return sanitized
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -119,9 +140,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         for msg in new_messages:
                             _LOGGER.info("SMARTSMS POLLING: Processing message SID %s from %s", msg.sid, msg.from_)
                             
+                            # Sanitize message body to prevent markdown formatting issues
+                            raw_body = msg.body[:1000] if msg.body else ""
+                            sanitized_body = _sanitize_message_text(raw_body) if raw_body else ""
+                            
                             # Build message_data dict as in webhook
                             message_data = {
-                                "body": msg.body[:1000] if msg.body else "",
+                                "body": sanitized_body,
+                                "raw_body": raw_body,  # Keep original for automations that need it
                                 "sender": msg.from_,
                                 "to_number": msg.to,
                                 "message_sid": msg.sid,

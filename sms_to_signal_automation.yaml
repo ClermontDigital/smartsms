@@ -12,8 +12,8 @@ condition: []
 action:
   - service: persistent_notification.create
     data:
-      title: "SMS Debug"
-      message: "Automation triggered for SMS from {{ trigger.event.data.sender }}: {{ trigger.event.data.body }}"
+      title: "SMS from {{ trigger.event.data.sender }}"
+      message: "{{ trigger.event.data.body }}"
   - service: notify.signal
     data:
       message: |

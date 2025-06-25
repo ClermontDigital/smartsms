@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![HACS Badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
-[![Version](https://img.shields.io/badge/version-0.7.4-green.svg)](https://github.com/ClermontDigital/smartsms)
+[![Version](https://img.shields.io/badge/version-0.7.5-green.svg)](https://github.com/ClermontDigital/smartsms)
 
 A Home Assistant integration that receives SMS messages via Twilio API polling and exposes them as entities for automation. Designed to work reliably with Home Assistant Cloud (Nabu Casa) by bypassing webhook limitations.
 
