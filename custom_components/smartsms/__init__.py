@@ -3,11 +3,10 @@ from __future__ import annotations
 
 import logging
 from typing import Any
-import asyncio
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.const import Platform, EVENT_HOMEASSISTANT_STARTED
+from homeassistant.core import HomeAssistant, Event
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
 
@@ -35,10 +34,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN][entry.entry_id] = {
             "config": entry.data,
             "data_store": data_store,
+            "webhook_registered": False,
         }
         
-        # Wait for webhook component to be fully ready, then register webhook
-        await _ensure_webhook_ready_and_register(hass, entry)
+        # Register webhook after Home Assistant is fully started
+        await _schedule_webhook_registration(hass, entry)
         
         # Setup platforms
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -65,35 +65,47 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise ConfigEntryNotReady(f"Failed to set up SmartSMS: {err}") from err
 
 
-async def _ensure_webhook_ready_and_register(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Ensure webhook component is ready and register webhook with retries."""
-    max_retries = 10
-    retry_delay = 1.0  # seconds
+async def _schedule_webhook_registration(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Schedule webhook registration after Home Assistant startup."""
     
-    for attempt in range(max_retries):
-        try:
-            # Check if webhook component is properly loaded
-            webhook_component = hass.data.get('webhook')
-            _LOGGER.error("🔧 Attempt %d: Webhook component check: %s", attempt + 1, webhook_component is not None)
+    if hass.is_running:
+        # Home Assistant is already started, register immediately
+        _LOGGER.error("🔧 Home Assistant already running, registering webhook immediately")
+        await _register_webhook_safely(hass, entry)
+    else:
+        # Home Assistant is still starting, wait for startup event
+        _LOGGER.error("🔧 Home Assistant still starting, waiting for startup event")
+        
+        async def on_homeassistant_started(event: Event) -> None:
+            """Handle Home Assistant started event."""
+            _LOGGER.error("🔧 Home Assistant started event received, registering webhook")
+            await _register_webhook_safely(hass, entry)
+        
+        # Listen for the startup event
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, on_homeassistant_started)
+
+
+async def _register_webhook_safely(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Register webhook with proper error handling."""
+    try:
+        # Check if already registered
+        entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+        if entry_data.get("webhook_registered", False):
+            _LOGGER.error("🔧 Webhook already registered for entry %s", entry.entry_id)
+            return
+        
+        _LOGGER.error("🔧 Attempting webhook registration for entry %s", entry.entry_id)
+        await async_register_webhook(hass, entry)
+        
+        # Mark as registered
+        if entry.entry_id in hass.data.get(DOMAIN, {}):
+            hass.data[DOMAIN][entry.entry_id]["webhook_registered"] = True
             
-            if webhook_component and hasattr(webhook_component, '_handlers'):
-                _LOGGER.error("🔧 Webhook component ready! Registering webhook...")
-                await async_register_webhook(hass, entry)
-                return
-            
-            if attempt < max_retries - 1:
-                _LOGGER.error("🔧 Webhook component not ready, waiting %.1fs (attempt %d/%d)", retry_delay, attempt + 1, max_retries)
-                await asyncio.sleep(retry_delay)
-                retry_delay *= 1.5  # Exponential backoff
-            else:
-                _LOGGER.error("🔧 Webhook component still not ready after %d attempts, proceeding anyway", max_retries)
-                await async_register_webhook(hass, entry)
-                
-        except Exception as err:
-            if attempt == max_retries - 1:
-                raise
-            _LOGGER.warning("🔧 Webhook registration attempt %d failed: %s, retrying...", attempt + 1, err)
-            await asyncio.sleep(retry_delay)
+        _LOGGER.error("🔧 ✅ Webhook registration completed successfully")
+        
+    except Exception as err:
+        _LOGGER.error("🔧 ❌ Failed to register webhook: %s", err)
+        # Don't fail the integration setup, just log the error
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -101,15 +113,22 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.info("Unloading SmartSMS integration: %s", entry.title)
     
     try:
-        # Unregister webhook first
-        await async_unregister_webhook(hass, entry)
+        # Get entry data before cleanup
+        entry_data = hass.data[DOMAIN].get(entry.entry_id, {})
+        webhook_registered = entry_data.get("webhook_registered", False)
+        
+        # Unregister webhook if it was registered
+        if webhook_registered:
+            _LOGGER.error("🔧 Unregistering webhook for entry %s", entry.entry_id)
+            await async_unregister_webhook(hass, entry)
+        else:
+            _LOGGER.error("🔧 No webhook to unregister for entry %s", entry.entry_id)
         
         # Unload platforms
         unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
         
         if unload_ok:
             # Clean up data store
-            entry_data = hass.data[DOMAIN].get(entry.entry_id, {})
             data_store = entry_data.get("data_store")
             if data_store:
                 await data_store.cleanup()

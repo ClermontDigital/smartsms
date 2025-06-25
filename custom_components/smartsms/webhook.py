@@ -58,7 +58,7 @@ async def async_register_webhook(hass: HomeAssistant, entry: ConfigEntry) -> Non
     _LOGGER.error("🔧 Entry title: %s", entry.title)
     
     try:
-        # Check webhook system availability
+        # Check webhook system state
         webhook_component = hass.data.get('webhook')
         _LOGGER.error("🔧 Webhook component available: %s", webhook_component is not None)
         
@@ -66,9 +66,13 @@ async def async_register_webhook(hass: HomeAssistant, entry: ConfigEntry) -> Non
             existing_handlers = webhook_component._handlers
             _LOGGER.error("🔧 Existing webhook handlers: %s", list(existing_handlers.keys()))
             if webhook_id in existing_handlers:
-                _LOGGER.error("🔧 WARNING: Webhook ID already exists!")
+                _LOGGER.error("🔧 WARNING: Webhook ID already exists - unregistering first")
+                try:
+                    webhook.async_unregister(hass, webhook_id)
+                except Exception as e:
+                    _LOGGER.warning("🔧 Failed to unregister existing webhook: %s", e)
         
-        # Register webhook with detailed logging
+        # Register webhook
         _LOGGER.error("🔧 Calling webhook.async_register...")
         webhook.async_register(
             hass,
@@ -97,7 +101,6 @@ async def async_register_webhook(hass: HomeAssistant, entry: ConfigEntry) -> Non
             else:
                 _LOGGER.error("🔧 ❌ WEBHOOK REGISTRATION FAILED - NOT IN HANDLERS!")
         
-        # Final verification - test if our mapping is working
         _LOGGER.error("🔧 Final webhook mapping: %s", _WEBHOOK_TO_ENTRY)
         _LOGGER.error("🔧 WEBHOOK REGISTRATION COMPLETE")
         
