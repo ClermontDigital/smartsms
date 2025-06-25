@@ -262,6 +262,9 @@ def _extract_message_data(data: dict[str, Any]) -> dict[str, Any] | None:
         sender = get_value(TWILIO_FROM)
         to_number = get_value(TWILIO_TO)
         
+        # Debug log the raw extracted values
+        _LOGGER.debug("RAW EXTRACTED - Body: %r, From: %r, To: %r", body, sender, to_number)
+        
         if not body or not sender:
             _LOGGER.error("Missing required fields: Body=%s, From=%s", body, sender)
             return None
@@ -325,59 +328,55 @@ def _should_process_message(config: dict[str, Any], message_data: dict[str, Any]
 
 
 def _clean_message_body(body: str) -> str:
-    """Clean SMS message body by normalizing whitespace and removing problematic characters."""
+    """Clean SMS message body by keeping ONLY printable ASCII characters."""
     if not body:
         return body
     
     import re
     import html
-    import unicodedata
+    
+    _LOGGER.debug("ORIGINAL SMS BODY: %r (len=%d)", body, len(body))
     
     # Step 1: Handle URL decoding if needed (defensive)
     try:
         from urllib.parse import unquote_plus
-        # Only decode if it looks URL encoded (contains % sequences)
         if '%' in body and re.search(r'%[0-9A-Fa-f]{2}', body):
             body = unquote_plus(body)
-            _LOGGER.debug("URL decoded message body")
+            _LOGGER.debug("URL decoded: %r", body)
     except Exception:
-        pass  # Continue with original if decoding fails
+        pass
     
-    # Step 2: HTML entity decoding (Twilio sometimes sends HTML entities)
+    # Step 2: HTML entity decoding
     try:
         body = html.unescape(body)
+        _LOGGER.debug("HTML unescaped: %r", body)
     except Exception:
-        pass  # Continue with original if decoding fails
+        pass
     
-    # Step 3: Unicode normalization (handle different Unicode representations)
-    try:
-        body = unicodedata.normalize('NFC', body)
-    except Exception:
-        pass  # Continue with original if normalization fails
+    # Step 3: AGGRESSIVE ASCII-ONLY FILTERING
+    # Keep only printable ASCII characters (32-126) plus space (32)
+    # This removes ALL Unicode, control chars, and invisible characters
+    ascii_chars = []
+    for char in body:
+        char_code = ord(char)
+        if 32 <= char_code <= 126:  # Printable ASCII range
+            ascii_chars.append(char)
+        elif char_code == 9:  # Tab -> space
+            ascii_chars.append(' ')
+        elif char_code in (10, 13):  # LF, CR -> space
+            ascii_chars.append(' ')
+        else:
+            # Log what we're removing for debugging
+            _LOGGER.debug("REMOVED non-ASCII char: %r (code=%d)", char, char_code)
     
-    # Step 4: Replace various types of line breaks and control characters
-    # This handles CR (\r), LF (\n), CRLF (\r\n), and other control chars
-    clean_body = re.sub(r'[\r\n\t\v\f]+', ' ', body)
+    clean_body = ''.join(ascii_chars)
+    _LOGGER.debug("ASCII-only result: %r", clean_body)
     
-    # Step 5: Remove other problematic control characters (keep printable chars)
-    clean_body = re.sub(r'[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]+', '', clean_body)
-    
-    # Step 6: Replace multiple consecutive whitespace with single space
+    # Step 4: Normalize whitespace
     clean_body = re.sub(r'\s+', ' ', clean_body)
-    
-    # Step 7: Remove zero-width characters that can break formatting
-    zero_width_chars = [
-        '\u200B',  # Zero Width Space
-        '\u200C',  # Zero Width Non-Joiner
-        '\u200D',  # Zero Width Joiner
-        '\u2060',  # Word Joiner
-        '\uFEFF',  # Zero Width No-Break Space (BOM)
-    ]
-    for char in zero_width_chars:
-        clean_body = clean_body.replace(char, '')
-    
-    # Step 8: Strip leading/trailing whitespace
     clean_body = clean_body.strip()
+    
+    _LOGGER.debug("FINAL CLEANED: %r (len=%d)", clean_body, len(clean_body))
     
     return clean_body
 

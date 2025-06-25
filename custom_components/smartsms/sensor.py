@@ -200,29 +200,42 @@ class SmartSMSSensor(SensorEntity):
         if not text:
             return text
         
-        # First clean up any remaining line breaks and normalize whitespace
         import re
-        
-        # Replace any remaining CR/LF with spaces (defensive coding)
-        sanitized = re.sub(r'[\r\n]+', ' ', text)
-        
-        # Replace multiple consecutive whitespace with single space
-        sanitized = re.sub(r'\s+', ' ', sanitized)
-        
-        # Strip leading/trailing whitespace
-        sanitized = sanitized.strip()
-        
-        # Use HTML entities to prevent markdown interpretation
         import html
         
-        # HTML escape the text
-        sanitized = html.escape(sanitized)
+        # The text should already be ASCII-clean from webhook processing,
+        # but let's be extra defensive and ensure no formatting issues
         
-        # Then replace remaining problematic characters with safe alternatives
-        # Using visually similar Unicode characters that won't trigger markdown
-        sanitized = sanitized.replace('*', '•')  # Bullet point instead of asterisk
-        sanitized = sanitized.replace('_', '—')  # Em dash instead of underscore
-        sanitized = sanitized.replace('`', "'")  # Single quote instead of backtick
+        # Replace any markdown-triggering characters with safe alternatives
+        # Do this BEFORE HTML escaping to avoid double-escaping
+        sanitized = text
+        
+        # Replace markdown characters with visually similar safe alternatives
+        markdown_replacements = {
+            '*': '∗',    # Mathematical asterisk (not markdown)
+            '_': '‗',    # Double low line (not markdown)
+            '`': "'",    # Single quote instead of backtick
+            '~': '∼',    # Tilde operator (not strikethrough)
+            '#': '♯',    # Musical sharp (not heading)
+            '[': '⟨',    # Mathematical left angle bracket
+            ']': '⟩',    # Mathematical right angle bracket
+            '!': 'ǃ',    # Latin letter retroflex click (looks like !)
+            '|': '⎸',    # Left vertical box line
+            '\\': '⧵',   # Reverse solidus operator
+            '^': '＾',   # Fullwidth circumflex accent
+            '>': '＞',   # Fullwidth greater-than sign
+            '<': '＜',   # Fullwidth less-than sign
+        }
+        
+        for char, replacement in markdown_replacements.items():
+            sanitized = sanitized.replace(char, replacement)
+        
+        # Normalize whitespace
+        sanitized = re.sub(r'\s+', ' ', sanitized)
+        sanitized = sanitized.strip()
+        
+        # Final HTML escape for any remaining special characters
+        sanitized = html.escape(sanitized)
         
         return sanitized
 
