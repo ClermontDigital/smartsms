@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![HACS Badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
-[![Version](https://img.shields.io/badge/version-0.7.0-green.svg)](https://github.com/ClermontDigital/smartsms)
+[![Version](https://img.shields.io/badge/version-0.7.1-green.svg)](https://github.com/ClermontDigital/smartsms)
 
 A simple Home Assistant integration that receives SMS messages via webhooks and exposes them as entities for automation. Currently supports SMS providers that use webhook delivery.
 

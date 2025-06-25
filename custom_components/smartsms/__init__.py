@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+import asyncio
+from datetime import datetime, timezone, timedelta
+from twilio.rest import Client
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -57,6 +60,114 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             configuration_url="https://console.twilio.com/",
         )
         
+        # --- POLLING TASK ---
+        async def poll_twilio_messages():
+            """Poll Twilio for new inbound messages every 60 seconds."""
+            _LOGGER.warning("SMARTSMS POLLING TASK STARTED")
+            account_sid = entry.data.get("account_sid")
+            auth_token = entry.data.get("auth_token")
+            
+            if not account_sid or not auth_token:
+                _LOGGER.error("SMARTSMS POLLING: Missing Twilio credentials")
+                return
+                
+            try:
+                client = Client(account_sid, auth_token)
+                _LOGGER.info("SMARTSMS POLLING: Twilio client initialized")
+            except Exception as err:
+                _LOGGER.error("SMARTSMS POLLING: Failed to create Twilio client: %s", err)
+                return
+            
+            last_seen_sid = hass.data[DOMAIN][entry.entry_id].get("last_seen_sid")
+            _LOGGER.info("SMARTSMS POLLING: Starting with last_seen_sid: %s", last_seen_sid)
+            
+            while True:
+                try:
+                    _LOGGER.debug("SMARTSMS POLLING: Fetching messages from Twilio...")
+                    
+                    # Fetch all inbound messages from the last 24 hours
+                    messages = await hass.async_add_executor_job(
+                        lambda: client.messages.list(
+                            date_sent_after=(datetime.now(timezone.utc) - timedelta(hours=24)),
+                            limit=50
+                        )
+                    )
+                    
+                    _LOGGER.debug("SMARTSMS POLLING: Found %d total messages", len(messages))
+                    
+                    # Filter for inbound messages only
+                    inbound_messages = [msg for msg in messages if msg.direction == "inbound"]
+                    _LOGGER.debug("SMARTSMS POLLING: Found %d inbound messages", len(inbound_messages))
+                    
+                    if not inbound_messages:
+                        _LOGGER.debug("SMARTSMS POLLING: No inbound messages found")
+                        await asyncio.sleep(60)
+                        continue
+                    
+                    # Find new messages (after last_seen_sid)
+                    new_messages = []
+                    for msg in inbound_messages:
+                        if last_seen_sid and msg.sid == last_seen_sid:
+                            break  # Already processed up to here
+                        new_messages.append(msg)
+                    
+                    _LOGGER.debug("SMARTSMS POLLING: Found %d new messages", len(new_messages))
+                    
+                    if new_messages:
+                        # Process messages in chronological order (oldest first)
+                        for msg in reversed(new_messages):
+                            _LOGGER.info("SMARTSMS POLLING: Processing message SID %s from %s", msg.sid, msg.from_)
+                            
+                            # Build message_data dict as in webhook
+                            message_data = {
+                                "body": msg.body[:1000] if msg.body else "",
+                                "sender": msg.from_,
+                                "to_number": msg.to,
+                                "message_sid": msg.sid,
+                                "timestamp": msg.date_sent.isoformat() if msg.date_sent else datetime.now(timezone.utc).isoformat(),
+                                "provider": "twilio",
+                            }
+                            
+                            # Apply filters (reuse functions from webhook.py)
+                            from .webhook import _should_process_message, _check_keywords, _update_entities
+                            config = entry.data
+                            
+                            if not _should_process_message(config, message_data):
+                                _LOGGER.debug("SMARTSMS POLLING: Message filtered out from %s", message_data["sender"])
+                                continue
+                            
+                            matched_keywords = _check_keywords(config.get("keywords", []), message_data["body"])
+                            if matched_keywords:
+                                message_data["matched_keywords"] = matched_keywords
+                            
+                            # Fire events
+                            hass.bus.async_fire("smartsms_message_received", message_data)
+                            if matched_keywords:
+                                hass.bus.async_fire("smartsms_keyword_matched", message_data)
+                            
+                            # Update entities
+                            await _update_entities(hass, entry.entry_id, message_data)
+                            
+                            _LOGGER.info("SMARTSMS POLLING: Processed SMS from %s: %s", 
+                                        message_data["sender"], 
+                                        message_data["body"][:50] + "..." if len(message_data["body"]) > 50 else message_data["body"])
+                            
+                            # Update last_seen_sid
+                            hass.data[DOMAIN][entry.entry_id]["last_seen_sid"] = msg.sid
+                        
+                        _LOGGER.info("SMARTSMS POLLING: Processed %d new messages", len(new_messages))
+                    
+                    await asyncio.sleep(60)  # Poll every 60 seconds
+                    
+                except Exception as err:
+                    _LOGGER.error("SMARTSMS POLLING: Error in polling loop: %s", err)
+                    _LOGGER.exception("SMARTSMS POLLING: Full error trace:")
+                    await asyncio.sleep(60)  # Wait before retrying
+        
+        # Start polling task
+        poll_task = hass.async_create_task(poll_twilio_messages())
+        hass.data[DOMAIN][entry.entry_id]["poll_task"] = poll_task
+        
         _LOGGER.warning("SMARTSMS SETUP COMPLETE: %s", entry.title)
         return True
         
@@ -74,6 +185,17 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.info("Unloading SmartSMS integration: %s", entry.title)
     
     try:
+        # Cancel polling task first
+        entry_data = hass.data[DOMAIN].get(entry.entry_id, {})
+        poll_task = entry_data.get("poll_task")
+        if poll_task and not poll_task.done():
+            _LOGGER.info("Cancelling SmartSMS polling task")
+            poll_task.cancel()
+            try:
+                await poll_task
+            except asyncio.CancelledError:
+                pass
+        
         # Unregister webhook
         await async_unregister_webhook(hass, entry)
         
@@ -82,7 +204,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         
         if unload_ok:
             # Clean up data store
-            entry_data = hass.data[DOMAIN].get(entry.entry_id, {})
             data_store = entry_data.get("data_store")
             if data_store:
                 await data_store.cleanup()
