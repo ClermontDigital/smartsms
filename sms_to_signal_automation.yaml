@@ -1,0 +1,27 @@
+alias: "Forward SMS to Signal"
+description: "Automatically forward all incoming SMS messages to Signal"
+mode: single
+max_exceeded: silent
+
+trigger:
+  - platform: event
+    event_type: smartsms_message_received
+
+condition: []
+
+action:
+  - service: persistent_notification.create
+    data:
+      title: "SMS Debug"
+      message: "Automation triggered for SMS from {{ trigger.event.data.sender }}: {{ trigger.event.data.body }}"
+  - service: notify.signal
+    data:
+      message: |
+        📱 SMS from {{ trigger.event.data.sender }}:
+        
+        {{ trigger.event.data.body }}
+      target:
+        - "+1234567890"  # Replace with your Signal number
+        # - "+0987654321"  # Add more numbers if needed
+  - delay:
+      seconds: 2 

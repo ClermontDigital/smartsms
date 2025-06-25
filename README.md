@@ -4,56 +4,80 @@
 [![HACS Badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
 [![Version](https://img.shields.io/badge/version-0.7.2-green.svg)](https://github.com/ClermontDigital/smartsms)
 
-A simple Home Assistant integration that receives SMS messages via webhooks and exposes them as entities for automation. Currently supports SMS providers that use webhook delivery.
+A Home Assistant integration that receives SMS messages via Twilio API polling and exposes them as entities for automation. Designed to work reliably with Home Assistant Cloud (Nabu Casa) by bypassing webhook limitations.
 
 ## What It Does
 
-- **Receives SMS** messages through webhook endpoints
+- **Receives SMS** messages through Twilio API polling (every 60 seconds)
 - **Creates entities** in Home Assistant with message content and sender info
 - **Triggers automations** when new messages arrive
 - **Filters messages** by sender or keywords if needed
 - **Stores message history** for a configurable period
+- **Works with Nabu Casa** - no webhook configuration needed
 
 ## Quick Start
 
 ### Requirements
 - Home Assistant 2024.1 or newer  
-- **Home Assistant Cloud (Nabu Casa) subscription** - Required for webhook handling
-- SMS provider with webhook support (tested with Twilio)
+- **Twilio account** with SMS-capable phone number
+- Internet connectivity for API polling
 
 ### Installation
 
 **Method 1: HACS (Recommended)**
-1. Add this repository to HACS as a custom integration
-2. Install "SmartSMS" from HACS
-3. Restart Home Assistant
-4. Add the integration via Settings → Devices & Services
+
+1. **Add Custom Repository**:
+   - Open HACS in Home Assistant
+   - Go to **Integrations**
+   - Click the **⋮** menu → **Custom repositories**
+   - Add repository URL: `https://github.com/ClermontDigital/smartsms`
+   - Category: **Integration**
+   - Click **Add**
+
+2. **Install SmartSMS**:
+   - Find "SmartSMS" in HACS integrations
+   - Click **Download**
+   - Restart Home Assistant
+
+3. **Add Integration**:
+   - Go to Settings → Devices & Services → **Add Integration**
+   - Search for "SmartSMS"
+   - Enter your Twilio credentials
 
 **Method 2: Manual**
-1. Download the latest release
+1. Download the latest release from GitHub
 2. Extract to `/config/custom_components/smartsms/`
 3. Restart Home Assistant
 4. Add the integration via Settings → Devices & Services
 
 ### Configuration
 
-1. **Get SMS Provider Credentials** (Twilio example):
-   - Account SID (starts with `AC...`)
-   - Auth Token (32 characters)
+1. **Get Twilio Credentials**:
+   - Account SID (starts with `AC...`, 34 characters)
+   - Auth Token (32 characters, found under Account SID)
 
 2. **Add Integration**:
    - Go to Settings → Devices & Services → Add Integration
    - Search for "SmartSMS"
-   - Enter your provider credentials
+   - Enter your Twilio credentials
    - Configure any message filters (optional)
 
-3. **Set Up Webhook**:
-   - After configuring the integration, go to Settings → Home Assistant Cloud → Webhooks
-   - Find your SmartSMS webhook in the list and copy its URL
-   - Configure this URL in your SMS provider's settings  
-   - Send a test message to verify it works
+3. **Test**:
+   - Send an SMS to your Twilio phone number
+   - Check that entities update within 60 seconds
+   - Messages are polled automatically - no webhook setup needed
 
-**Note**: SmartSMS uses Home Assistant Cloud's webhook routing system, which requires an active Nabu Casa subscription. The webhook URLs are managed centrally in the cloud section, not within the integration itself.
+## How It Works
+
+SmartSMS uses **Twilio API polling** instead of webhooks to retrieve messages:
+
+- **Polls every 60 seconds** for new inbound messages
+- **Tracks processed messages** to avoid duplicates
+- **Applies filters** and fires Home Assistant events
+- **Updates entities** with latest message data
+- **No webhook configuration** required
+
+This approach bypasses the known issues with Twilio webhooks and Home Assistant Cloud content-type handling.
 
 ## Entities Created
 
@@ -129,10 +153,12 @@ automation:
     trigger:
       - platform: event
         event_type: smartsms_message_received
-    condition:
-      - condition: template
-        value_template: "{{ trigger.event.data.message_sid is defined }}"
+    condition: []
     action:
+      - service: persistent_notification.create
+        data:
+          title: "SMS Debug"
+          message: "Automation triggered for SMS from {{ trigger.event.data.sender }}: {{ trigger.event.data.body }}"
       - service: notify.signal
         data:
           message: |
