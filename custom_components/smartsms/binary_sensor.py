@@ -62,7 +62,7 @@ class SmartSMSBinarySensor(BinarySensorEntity):
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
         self._attr_name = f"{entry.title} {description.name}"
         self._attr_is_on = False
-        self._reset_task: asyncio.Task | None = None
+        self._reset_cancel = None  # Cancel callback from async_call_later
         
         # Set up device info
         self._attr_device_info = DeviceInfo(
@@ -96,16 +96,17 @@ class SmartSMSBinarySensor(BinarySensorEntity):
     @callback
     def _trigger_new_message(self) -> None:
         """Trigger the binary sensor to indicate a new message."""
-        # Cancel any existing reset task
-        if self._reset_task and not self._reset_task.done():
-            self._reset_task.cancel()
+        # Cancel any existing reset callback
+        if self._reset_cancel:
+            self._reset_cancel()
+            self._reset_cancel = None
         
         # Turn on the binary sensor
         self._attr_is_on = True
         self.async_write_ha_state()
         
         # Schedule reset after delay
-        self._reset_task = async_call_later(
+        self._reset_cancel = async_call_later(
             self.hass,
             BINARY_SENSOR_RESET_DELAY,
             self._reset_sensor,
@@ -116,7 +117,7 @@ class SmartSMSBinarySensor(BinarySensorEntity):
         """Reset the binary sensor to off state."""
         self._attr_is_on = False
         self.async_write_ha_state()
-        self._reset_task = None
+        self._reset_cancel = None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
@@ -135,13 +136,58 @@ class SmartSMSBinarySensor(BinarySensorEntity):
         
         # Include info about the last message
         body = latest_message.get(ATTR_BODY, "")
+        
+        # Sanitize the body for display (apply same ASCII-only filtering)
+        if body:
+            sanitized_body = self._sanitize_preview_text(body)
+            preview = sanitized_body[:50] + "..." if len(sanitized_body) > 50 else sanitized_body
+        else:
+            preview = ""
+        
         return {
             "reset_delay": BINARY_SENSOR_RESET_DELAY,
             "message_count": entry_data.get("message_count", 0),
-            "last_message_preview": body[:50] + "..." if len(body) > 50 else body,
+            "last_message_preview": preview,
             "last_sender": latest_message.get(ATTR_SENDER),
             "last_message_time": latest_message.get(ATTR_TIMESTAMP),
         }
+
+    def _sanitize_preview_text(self, text: str) -> str:
+        """Clean text for preview display using ASCII-only filtering."""
+        if not text:
+            return text
+        
+        import re
+        import html
+        
+        _LOGGER.debug("BINARY SENSOR ORIGINAL: %r", text)
+        
+        # Apply same aggressive ASCII-only filtering as polling function
+        ascii_chars = []
+        for char in text:
+            char_code = ord(char)
+            if 32 <= char_code <= 126:  # Printable ASCII range
+                # But specifically remove asterisks and other markdown chars
+                if char not in ['*', '_', '`', '#', '[', ']', '!', '|', '\\', '^', '>', '<', '~']:
+                    ascii_chars.append(char)
+                else:
+                    _LOGGER.debug("BINARY SENSOR REMOVED markdown char: %r", char)
+            elif char_code == 9:  # Tab -> space
+                ascii_chars.append(' ')
+            elif char_code in (10, 13):  # LF, CR -> space
+                ascii_chars.append(' ')
+            else:
+                _LOGGER.debug("BINARY SENSOR REMOVED non-ASCII: %r (code=%d)", char, char_code)
+        
+        clean_text = ''.join(ascii_chars)
+        
+        # Normalize whitespace
+        clean_text = re.sub(r'\s+', ' ', clean_text)
+        clean_text = clean_text.strip()
+        
+        _LOGGER.debug("BINARY SENSOR FINAL: %r", clean_text)
+        
+        return clean_text
 
     @property
     def available(self) -> bool:
@@ -150,8 +196,9 @@ class SmartSMSBinarySensor(BinarySensorEntity):
 
     async def async_will_remove_from_hass(self) -> None:
         """When entity will be removed from hass."""
-        # Cancel any pending reset task
-        if self._reset_task and not self._reset_task.done():
-            self._reset_task.cancel()
+        # Cancel any pending reset callback
+        if self._reset_cancel:
+            self._reset_cancel()
+            self._reset_cancel = None
         
         await super().async_will_remove_from_hass() 

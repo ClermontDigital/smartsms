@@ -34,14 +34,18 @@ def _sanitize_message_text(text: str) -> str:
     except Exception:
         pass
     
-    # Step 3: AGGRESSIVE ASCII-ONLY FILTERING
-    # Keep only printable ASCII characters (32-126) plus space (32)
-    # This removes ALL Unicode, control chars, and invisible characters
+    # Step 3: AGGRESSIVE ASCII-ONLY FILTERING + MARKDOWN REMOVAL
+    # Keep only printable ASCII characters (32-126) but exclude markdown chars
+    # This removes ALL Unicode, control chars, invisible characters AND markdown
     ascii_chars = []
     for char in text:
         char_code = ord(char)
         if 32 <= char_code <= 126:  # Printable ASCII range
-            ascii_chars.append(char)
+            # But specifically remove asterisks and other markdown characters
+            if char not in ['*', '_', '`', '#', '[', ']', '!', '|', '\\', '^', '>', '<', '~']:
+                ascii_chars.append(char)
+            else:
+                _LOGGER.debug("POLLING REMOVED markdown char: %r (code=%d)", char, char_code)
         elif char_code == 9:  # Tab -> space
             ascii_chars.append(' ')
         elif char_code in (10, 13):  # LF, CR -> space

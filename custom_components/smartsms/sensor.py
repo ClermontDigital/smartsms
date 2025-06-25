@@ -98,8 +98,10 @@ class SmartSMSSensor(SensorEntity):
         if self.entity_description.key == SENSOR_LAST_MESSAGE:
             body = latest_message.get(ATTR_BODY, "")
             if body:
+                _LOGGER.debug("SENSOR RECEIVED BODY: %r (len=%d)", body, len(body))
                 # Sanitize markdown characters to prevent formatting issues
                 sanitized_body = self._sanitize_text(body)
+                _LOGGER.debug("SENSOR FINAL SANITIZED: %r (len=%d)", sanitized_body, len(sanitized_body))
                 # Truncate long messages for the state
                 return sanitized_body[:255]
             return None

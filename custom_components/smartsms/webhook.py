@@ -353,21 +353,25 @@ def _clean_message_body(body: str) -> str:
     except Exception:
         pass
     
-    # Step 3: AGGRESSIVE ASCII-ONLY FILTERING
-    # Keep only printable ASCII characters (32-126) plus space (32)
-    # This removes ALL Unicode, control chars, and invisible characters
+    # Step 3: AGGRESSIVE ASCII-ONLY FILTERING + MARKDOWN REMOVAL
+    # Keep only printable ASCII characters (32-126) but exclude markdown chars
+    # This removes ALL Unicode, control chars, invisible characters AND markdown
     ascii_chars = []
     for char in body:
         char_code = ord(char)
         if 32 <= char_code <= 126:  # Printable ASCII range
-            ascii_chars.append(char)
+            # But specifically remove asterisks and other markdown characters
+            if char not in ['*', '_', '`', '#', '[', ']', '!', '|', '\\', '^', '>', '<', '~']:
+                ascii_chars.append(char)
+            else:
+                _LOGGER.debug("WEBHOOK REMOVED markdown char: %r (code=%d)", char, char_code)
         elif char_code == 9:  # Tab -> space
             ascii_chars.append(' ')
         elif char_code in (10, 13):  # LF, CR -> space
             ascii_chars.append(' ')
         else:
             # Log what we're removing for debugging
-            _LOGGER.debug("REMOVED non-ASCII char: %r (code=%d)", char, char_code)
+            _LOGGER.debug("WEBHOOK REMOVED non-ASCII char: %r (code=%d)", char, char_code)
     
     clean_body = ''.join(ascii_chars)
     _LOGGER.debug("ASCII-only result: %r", clean_body)
