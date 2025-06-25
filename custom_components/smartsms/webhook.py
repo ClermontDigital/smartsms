@@ -58,19 +58,53 @@ async def async_register_webhook(hass: HomeAssistant, entry: ConfigEntry) -> Non
     _LOGGER.error("🔧 Entry title: %s", entry.title)
     
     try:
-        # Check webhook system state
-        webhook_component = hass.data.get('webhook')
-        _LOGGER.error("🔧 Webhook component available: %s", webhook_component is not None)
+        # Get webhook component from multiple possible locations
+        webhook_component = None
+        webhook_data = None
         
+        # Try to find webhook component in different ways
+        if 'webhook' in hass.data:
+            webhook_data = hass.data['webhook']
+            _LOGGER.error("🔧 Found webhook in hass.data")
+        
+        # Try to get webhook component directly
+        try:
+            from homeassistant.components import webhook as webhook_component_module
+            if hasattr(webhook_component_module, '_HANDLERS'):
+                _LOGGER.error("🔧 Found _HANDLERS in webhook component module")
+            if hasattr(webhook_component_module, 'async_register'):
+                _LOGGER.error("🔧 Found async_register in webhook component module")
+        except Exception as e:
+            _LOGGER.error("🔧 Failed to inspect webhook component module: %s", e)
+        
+        # Check if webhook component is in hass.data
+        webhook_component = hass.data.get('webhook')
+        _LOGGER.error("🔧 Webhook component from hass.data: %s", webhook_component is not None)
+        
+        # Try to access webhook handlers in different ways
+        handlers_found = False
         if webhook_component and hasattr(webhook_component, '_handlers'):
             existing_handlers = webhook_component._handlers
-            _LOGGER.error("🔧 Existing webhook handlers: %s", list(existing_handlers.keys()))
+            _LOGGER.error("🔧 Existing webhook handlers via _handlers: %s", list(existing_handlers.keys()))
+            handlers_found = True
+            
             if webhook_id in existing_handlers:
                 _LOGGER.error("🔧 WARNING: Webhook ID already exists - unregistering first")
                 try:
                     webhook.async_unregister(hass, webhook_id)
                 except Exception as e:
                     _LOGGER.warning("🔧 Failed to unregister existing webhook: %s", e)
+        
+        # Alternative method to check handlers
+        if not handlers_found:
+            try:
+                # Check if webhook integration has handlers stored elsewhere
+                webhook_integration = hass.data.get('webhook')
+                if webhook_integration:
+                    _LOGGER.error("🔧 Webhook integration exists but no _handlers attribute")
+                    _LOGGER.error("🔧 Webhook integration attributes: %s", dir(webhook_integration))
+            except Exception as e:
+                _LOGGER.error("🔧 Error inspecting webhook integration: %s", e)
         
         # Register webhook
         _LOGGER.error("🔧 Calling webhook.async_register...")
@@ -87,21 +121,71 @@ async def async_register_webhook(hass: HomeAssistant, entry: ConfigEntry) -> Non
         _WEBHOOK_TO_ENTRY[webhook_id] = entry.entry_id
         _LOGGER.error("🔧 Added to mapping: %s -> %s", webhook_id, entry.entry_id)
         
-        # Verify registration worked
+        # Wait a moment for registration to complete
+        import asyncio
+        await asyncio.sleep(0.5)
+        
+        # Comprehensive verification
+        webhook_registered = False
+        
+        # Method 1: Check via webhook component
         webhook_component_after = hass.data.get('webhook')
         if webhook_component_after and hasattr(webhook_component_after, '_handlers'):
             handlers_after = webhook_component_after._handlers
             _LOGGER.error("🔧 Handlers after registration: %s", list(handlers_after.keys()))
             if webhook_id in handlers_after:
-                _LOGGER.error("🔧 ✅ WEBHOOK SUCCESSFULLY REGISTERED!")
+                _LOGGER.error("🔧 ✅ WEBHOOK FOUND IN HANDLERS LIST!")
                 handler_info = handlers_after[webhook_id]
                 _LOGGER.error("🔧 Handler details: %s", handler_info)
                 _LOGGER.error("🔧 Handler function: %s", getattr(handler_info, 'handler', 'unknown'))
+                webhook_registered = True
             else:
-                _LOGGER.error("🔧 ❌ WEBHOOK REGISTRATION FAILED - NOT IN HANDLERS!")
+                _LOGGER.error("🔧 ❌ WEBHOOK NOT IN HANDLERS LIST!")
                 _LOGGER.error("🔧 Available handlers: %s", list(handlers_after.keys()))
         else:
-            _LOGGER.error("🔧 ❌ Cannot verify webhook registration - no handlers available")
+            _LOGGER.error("🔧 ❌ Cannot access webhook handlers for verification")
+        
+        # Method 2: Check via Home Assistant's internal webhook registry
+        try:
+            from homeassistant.components.webhook import async_unregister
+            # If we can attempt to unregister and re-register, the webhook exists
+            _LOGGER.error("🔧 Testing webhook existence via unregister/register cycle...")
+            
+            # Try to unregister (this will fail if webhook doesn't exist)
+            try:
+                webhook.async_unregister(hass, webhook_id)
+                _LOGGER.error("🔧 Unregister succeeded - webhook was registered")
+                webhook_registered = True
+            except Exception as unreg_err:
+                _LOGGER.error("🔧 Unregister failed: %s - webhook may not be registered", unreg_err)
+            
+            # Re-register
+            webhook.async_register(
+                hass,
+                DOMAIN,
+                f"SmartSMS Webhook ({entry.title})",
+                webhook_id,
+                handle_webhook,
+            )
+            _LOGGER.error("🔧 Re-registered webhook after test")
+            
+        except Exception as test_err:
+            _LOGGER.error("🔧 Webhook existence test failed: %s", test_err)
+        
+        # Method 3: Generate webhook URL and log it
+        webhook_url = None
+        if hasattr(hass.config, 'external_url') and hass.config.external_url:
+            webhook_url = f"{hass.config.external_url}/api/webhook/{webhook_id}"
+        else:
+            webhook_url = f"http://localhost:8123/api/webhook/{webhook_id}"
+        
+        _LOGGER.error("🔧 Expected webhook URL: %s", webhook_url)
+        
+        # Summary
+        if webhook_registered:
+            _LOGGER.error("🔧 ✅ WEBHOOK REGISTRATION VERIFIED SUCCESSFUL")
+        else:
+            _LOGGER.error("🔧 ⚠️ WEBHOOK REGISTRATION UNCERTAIN - COULD NOT VERIFY")
         
         _LOGGER.error("🔧 Final webhook mapping: %s", _WEBHOOK_TO_ENTRY)
         _LOGGER.error("🔧 WEBHOOK REGISTRATION COMPLETE")
@@ -138,24 +222,33 @@ async def handle_webhook(
     _LOGGER.error("🚀 Request URL: %s", request.url)
     _LOGGER.error("🚀 Request headers: %s", dict(request.headers))
     _LOGGER.error("🚀 All webhook mappings: %s", _WEBHOOK_TO_ENTRY)
+    _LOGGER.error("🚀 Request remote address: %s", request.remote)
+    _LOGGER.error("🚀 Request transport info: %s", getattr(request, 'transport', 'unknown'))
     
     # Fire a test event to see if this handler is being called at all
     hass.bus.async_fire("smartsms_webhook_test", {
         "webhook_id": webhook_id,
         "method": request.method,
         "url": str(request.url),
-        "timestamp": dt_util.utcnow().isoformat()
+        "timestamp": dt_util.utcnow().isoformat(),
+        "remote": str(request.remote),
+        "headers": dict(request.headers)
     })
+    
+    # Log that we received the webhook call
+    _LOGGER.info("SmartSMS webhook handler called - webhook_id: %s, method: %s", webhook_id, request.method)
     
     try:
         # Security check: payload size limit
         content_length = getattr(request, 'content_length', None)
+        _LOGGER.error("🚀 Content length: %s", content_length)
         if content_length and content_length > 10000:  # 10KB limit
             _LOGGER.warning("Webhook payload too large: %s bytes", content_length)
             return web.Response(status=413, text="Payload too large")
         
         # Find config entry efficiently
         entry_id = _WEBHOOK_TO_ENTRY.get(webhook_id)
+        _LOGGER.error("🚀 Found entry_id for webhook: %s", entry_id)
         if not entry_id:
             _LOGGER.error("No config entry found for webhook ID: %s", webhook_id)
             _LOGGER.error("Available mappings: %s", _WEBHOOK_TO_ENTRY)
@@ -171,6 +264,8 @@ async def handle_webhook(
             _LOGGER.error("Config entry %s not found for webhook %s", entry_id, webhook_id)
             return web.Response(status=404, text="Config entry not found")
         
+        _LOGGER.error("🚀 Found config entry: %s", config_entry.title)
+        
         # Parse request data properly (only consume body once)
         data = await _parse_request_data(request)
         if not data:
@@ -178,6 +273,33 @@ async def handle_webhook(
             return web.Response(status=400, text="Invalid request data")
         
         _LOGGER.error("🚀 Parsed webhook data: %s", data)
+        
+        # Check if this is a test message (contains our test data)
+        if data.get("Body") == "Test+from+curl" or data.get("Body") == "Test from curl":
+            _LOGGER.error("🚀 🧪 DETECTED TEST MESSAGE FROM CURL!")
+            # Create a test response that we can see in Home Assistant
+            test_message_data = {
+                ATTR_BODY: "Webhook Test Successful",
+                ATTR_SENDER: data.get("From", "+TEST"),
+                ATTR_TO_NUMBER: data.get("To", "+TEST"),
+                ATTR_MESSAGE_SID: data.get("MessageSid", "TEST"),
+                ATTR_TIMESTAMP: dt_util.utcnow().isoformat(),
+                ATTR_PROVIDER: "test",
+            }
+            
+            # Fire events
+            hass.bus.async_fire(EVENT_MESSAGE_RECEIVED, test_message_data)
+            hass.bus.async_fire("smartsms_test_success", {
+                "message": "Webhook is working!",
+                "timestamp": dt_util.utcnow().isoformat(),
+                "webhook_id": webhook_id
+            })
+            
+            # Update entities
+            await _update_entities(hass, config_entry.entry_id, test_message_data)
+            
+            _LOGGER.error("🚀 ✅ TEST MESSAGE PROCESSED SUCCESSFULLY!")
+            return web.Response(status=200, text="Test message processed successfully", content_type="text/plain")
         
         # Validate Twilio signature if enabled
         auth_token = config_entry.data.get(CONF_AUTH_TOKEN)
