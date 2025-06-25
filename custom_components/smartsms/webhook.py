@@ -187,10 +187,21 @@ async def _parse_request_data(request: web.Request) -> dict[str, Any] | None:
     try:
         # Read body only once
         body = await request.read()
-        body_str = body.decode('utf-8')
+        
+        # Try different encodings if UTF-8 fails
+        try:
+            body_str = body.decode('utf-8')
+        except UnicodeDecodeError:
+            try:
+                body_str = body.decode('latin-1')
+                _LOGGER.warning("Using latin-1 encoding for webhook data")
+            except UnicodeDecodeError:
+                body_str = body.decode('utf-8', errors='replace')
+                _LOGGER.warning("Using UTF-8 with error replacement for webhook data")
         
         # Try form data first (most common for Twilio)
         if request.content_type == 'application/x-www-form-urlencoded':
+            # parse_qs automatically handles URL decoding
             return dict(parse_qs(body_str, keep_blank_values=True))
         
         # Try JSON
@@ -198,7 +209,7 @@ async def _parse_request_data(request: web.Request) -> dict[str, Any] | None:
             import json
             return json.loads(body_str)
         
-        # Manual parse for form data
+        # Manual parse for form data (fallback)
         return dict(parse_qs(body_str, keep_blank_values=True))
         
     except Exception as err:
@@ -270,8 +281,11 @@ def _extract_message_data(data: dict[str, Any]) -> dict[str, Any] | None:
         if not _is_valid_phone(sender) or not _is_valid_phone(to_number):
             _LOGGER.warning("Invalid phone number format: From=%s, To=%s", sender, to_number)
         
+        # Clean up the message body to remove CR/LF and other problematic characters
+        clean_body = _clean_message_body(body)
+        
         return {
-            ATTR_BODY: body[:1000],  # Limit message length
+            ATTR_BODY: clean_body[:1000],  # Limit message length
             ATTR_SENDER: sender,
             ATTR_TO_NUMBER: to_number,
             ATTR_MESSAGE_SID: get_value(TWILIO_MESSAGE_SID),
@@ -308,6 +322,64 @@ def _should_process_message(config: dict[str, Any], message_data: dict[str, Any]
         return False
     
     return True
+
+
+def _clean_message_body(body: str) -> str:
+    """Clean SMS message body by normalizing whitespace and removing problematic characters."""
+    if not body:
+        return body
+    
+    import re
+    import html
+    import unicodedata
+    
+    # Step 1: Handle URL decoding if needed (defensive)
+    try:
+        from urllib.parse import unquote_plus
+        # Only decode if it looks URL encoded (contains % sequences)
+        if '%' in body and re.search(r'%[0-9A-Fa-f]{2}', body):
+            body = unquote_plus(body)
+            _LOGGER.debug("URL decoded message body")
+    except Exception:
+        pass  # Continue with original if decoding fails
+    
+    # Step 2: HTML entity decoding (Twilio sometimes sends HTML entities)
+    try:
+        body = html.unescape(body)
+    except Exception:
+        pass  # Continue with original if decoding fails
+    
+    # Step 3: Unicode normalization (handle different Unicode representations)
+    try:
+        body = unicodedata.normalize('NFC', body)
+    except Exception:
+        pass  # Continue with original if normalization fails
+    
+    # Step 4: Replace various types of line breaks and control characters
+    # This handles CR (\r), LF (\n), CRLF (\r\n), and other control chars
+    clean_body = re.sub(r'[\r\n\t\v\f]+', ' ', body)
+    
+    # Step 5: Remove other problematic control characters (keep printable chars)
+    clean_body = re.sub(r'[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]+', '', clean_body)
+    
+    # Step 6: Replace multiple consecutive whitespace with single space
+    clean_body = re.sub(r'\s+', ' ', clean_body)
+    
+    # Step 7: Remove zero-width characters that can break formatting
+    zero_width_chars = [
+        '\u200B',  # Zero Width Space
+        '\u200C',  # Zero Width Non-Joiner
+        '\u200D',  # Zero Width Joiner
+        '\u2060',  # Word Joiner
+        '\uFEFF',  # Zero Width No-Break Space (BOM)
+    ]
+    for char in zero_width_chars:
+        clean_body = clean_body.replace(char, '')
+    
+    # Step 8: Strip leading/trailing whitespace
+    clean_body = clean_body.strip()
+    
+    return clean_body
 
 
 def _check_keywords(keywords: list[str], message_body: str) -> list[str]:

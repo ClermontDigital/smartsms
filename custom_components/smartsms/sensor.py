@@ -132,6 +132,7 @@ class SmartSMSSensor(SensorEntity):
             attributes = {
                 "full_message": self._sanitize_text(raw_body) if raw_body else "",
                 "raw_message": raw_body,  # Keep original for automations that might need it
+                "template_safe": self._make_template_safe(raw_body) if raw_body else "",  # Safe for Jinja2
                 ATTR_SENDER: latest_message.get(ATTR_SENDER),
                 ATTR_TIMESTAMP: latest_message.get(ATTR_TIMESTAMP),
                 ATTR_MESSAGE_SID: latest_message.get(ATTR_MESSAGE_SID),
@@ -199,12 +200,23 @@ class SmartSMSSensor(SensorEntity):
         if not text:
             return text
         
+        # First clean up any remaining line breaks and normalize whitespace
+        import re
+        
+        # Replace any remaining CR/LF with spaces (defensive coding)
+        sanitized = re.sub(r'[\r\n]+', ' ', text)
+        
+        # Replace multiple consecutive whitespace with single space
+        sanitized = re.sub(r'\s+', ' ', sanitized)
+        
+        # Strip leading/trailing whitespace
+        sanitized = sanitized.strip()
+        
         # Use HTML entities to prevent markdown interpretation
-        # This should work better with Home Assistant's UI rendering
         import html
         
-        # First HTML escape the text
-        sanitized = html.escape(text)
+        # HTML escape the text
+        sanitized = html.escape(sanitized)
         
         # Then replace remaining problematic characters with safe alternatives
         # Using visually similar Unicode characters that won't trigger markdown
@@ -213,6 +225,29 @@ class SmartSMSSensor(SensorEntity):
         sanitized = sanitized.replace('`', "'")  # Single quote instead of backtick
         
         return sanitized
+
+    def _make_template_safe(self, text: str) -> str:
+        """Make text safe for use in Jinja2 templates and YAML."""
+        if not text:
+            return text
+        
+        # Start with basic sanitization
+        safe_text = self._sanitize_text(text)
+        
+        # Additional template safety measures
+        # Replace characters that can break Jinja2 templates
+        template_unsafe_chars = {
+            '{': '(',     # Replace with parenthesis
+            '}': ')',     # Replace with parenthesis
+            '%': 'pct',   # Replace with text
+            '"': "'",     # Replace double quotes with single quotes
+            '\\': '/',    # Replace backslash with forward slash
+        }
+        
+        for char, replacement in template_unsafe_chars.items():
+            safe_text = safe_text.replace(char, replacement)
+        
+        return safe_text
 
     async def async_update(self) -> None:
         """Update the sensor."""
