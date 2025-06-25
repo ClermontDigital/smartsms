@@ -13,18 +13,23 @@ def _sanitize_message_text(text: str) -> str:
     if not text:
         return text
     
-    # Use HTML entities to prevent markdown interpretation
-    # This should work better with Home Assistant's UI rendering
+    # More aggressive approach: replace all markdown characters with safe alternatives
+    # Some HA components are very aggressive about markdown interpretation
+    sanitized = text
+    
+    # Replace markdown characters with visually similar but safe alternatives
+    sanitized = sanitized.replace('*', '∗')  # Mathematical asterisk (U+2217)
+    sanitized = sanitized.replace('_', '＿')  # Fullwidth low line (U+FF3F)
+    sanitized = sanitized.replace('`', '′')  # Prime symbol (U+2032)
+    sanitized = sanitized.replace('#', '＃') # Fullwidth number sign (U+FF03)
+    sanitized = sanitized.replace('[', '［') # Fullwidth left square bracket (U+FF3B)
+    sanitized = sanitized.replace(']', '］') # Fullwidth right square bracket (U+FF3D)
+    sanitized = sanitized.replace('(', '（') # Fullwidth left parenthesis (U+FF08)
+    sanitized = sanitized.replace(')', '）') # Fullwidth right parenthesis (U+FF09)
+    
+    # Also escape any remaining HTML characters
     import html
-    
-    # First HTML escape the text
-    sanitized = html.escape(text)
-    
-    # Then replace remaining problematic characters with safe alternatives
-    # Using visually similar Unicode characters that won't trigger markdown
-    sanitized = sanitized.replace('*', '•')  # Bullet point instead of asterisk
-    sanitized = sanitized.replace('_', '—')  # Em dash instead of underscore
-    sanitized = sanitized.replace('`', "'")  # Single quote instead of backtick
+    sanitized = html.escape(sanitized)
     
     return sanitized
 
@@ -143,6 +148,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                             # Sanitize message body to prevent markdown formatting issues
                             raw_body = msg.body[:1000] if msg.body else ""
                             sanitized_body = _sanitize_message_text(raw_body) if raw_body else ""
+                            _LOGGER.warning("SMARTSMS SANITIZATION: Original='%s' -> Sanitized='%s'", raw_body, sanitized_body)
                             
                             # Build message_data dict as in webhook
                             message_data = {

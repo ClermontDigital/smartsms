@@ -14,6 +14,7 @@ action:
     data:
       title: "SMS from {{ trigger.event.data.sender }}"
       message: "{{ trigger.event.data.body }}"
+      notification_id: "sms_notification"
   - service: notify.signal
     data:
       message: |
