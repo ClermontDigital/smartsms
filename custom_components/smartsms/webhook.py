@@ -95,11 +95,13 @@ async def async_register_webhook(hass: HomeAssistant, entry: ConfigEntry) -> Non
             if webhook_id in handlers_after:
                 _LOGGER.error("🔧 ✅ WEBHOOK SUCCESSFULLY REGISTERED!")
                 handler_info = handlers_after[webhook_id]
-                _LOGGER.error("🔧 Handler info - domain: %s, name: %s", 
-                            getattr(handler_info, 'domain', 'unknown'),
-                            getattr(handler_info, 'name', 'unknown'))
+                _LOGGER.error("🔧 Handler details: %s", handler_info)
+                _LOGGER.error("🔧 Handler function: %s", getattr(handler_info, 'handler', 'unknown'))
             else:
                 _LOGGER.error("🔧 ❌ WEBHOOK REGISTRATION FAILED - NOT IN HANDLERS!")
+                _LOGGER.error("🔧 Available handlers: %s", list(handlers_after.keys()))
+        else:
+            _LOGGER.error("🔧 ❌ Cannot verify webhook registration - no handlers available")
         
         _LOGGER.error("🔧 Final webhook mapping: %s", _WEBHOOK_TO_ENTRY)
         _LOGGER.error("🔧 WEBHOOK REGISTRATION COMPLETE")
