@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![HACS Badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
-[![Version](https://img.shields.io/badge/version-0.7.1-green.svg)](https://github.com/ClermontDigital/smartsms)
+[![Version](https://img.shields.io/badge/version-0.7.2-green.svg)](https://github.com/ClermontDigital/smartsms)
 
 A simple Home Assistant integration that receives SMS messages via webhooks and exposes them as entities for automation. Currently supports SMS providers that use webhook delivery.
 
@@ -117,6 +117,32 @@ automation:
           entity_id: input_text.latest_verification_code
         data:
           value: "{{ trigger.event.data.body | regex_findall('\\b\\d{4,8}\\b') | first }}"
+```
+
+### Forward SMS to Signal
+```yaml
+automation:
+  - alias: "Forward SMS to Signal"
+    description: "Automatically forward all incoming SMS messages to Signal"
+    mode: single
+    max_exceeded: silent
+    trigger:
+      - platform: event
+        event_type: smartsms_message_received
+    condition:
+      - condition: template
+        value_template: "{{ trigger.event.data.message_sid is defined }}"
+    action:
+      - service: notify.signal
+        data:
+          message: |
+            📱 SMS from {{ trigger.event.data.sender }}:
+            
+            {{ trigger.event.data.body }}
+          target:
+            - "+1234567890"  # Replace with your Signal number
+      - delay:
+          seconds: 2
 ```
 
 ## Message Filtering

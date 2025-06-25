@@ -78,8 +78,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 _LOGGER.error("SMARTSMS POLLING: Failed to create Twilio client: %s", err)
                 return
             
-            last_seen_sid = hass.data[DOMAIN][entry.entry_id].get("last_seen_sid")
-            _LOGGER.info("SMARTSMS POLLING: Starting with last_seen_sid: %s", last_seen_sid)
+            # Use a set to track processed message SIDs instead of just last_seen_sid
+            processed_sids = set()
             
             while True:
                 try:
@@ -104,18 +104,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         await asyncio.sleep(60)
                         continue
                     
-                    # Find new messages (after last_seen_sid)
+                    # Find new messages (not in processed_sids set)
                     new_messages = []
                     for msg in inbound_messages:
-                        if last_seen_sid and msg.sid == last_seen_sid:
-                            break  # Already processed up to here
-                        new_messages.append(msg)
+                        if msg.sid not in processed_sids:
+                            new_messages.append(msg)
                     
                     _LOGGER.debug("SMARTSMS POLLING: Found %d new messages", len(new_messages))
                     
                     if new_messages:
                         # Process messages in chronological order (oldest first)
-                        for msg in reversed(new_messages):
+                        new_messages.sort(key=lambda x: x.date_sent or datetime.min.replace(tzinfo=timezone.utc))
+                        
+                        for msg in new_messages:
                             _LOGGER.info("SMARTSMS POLLING: Processing message SID %s from %s", msg.sid, msg.from_)
                             
                             # Build message_data dict as in webhook
@@ -134,6 +135,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                             
                             if not _should_process_message(config, message_data):
                                 _LOGGER.debug("SMARTSMS POLLING: Message filtered out from %s", message_data["sender"])
+                                # Still mark as processed even if filtered
+                                processed_sids.add(msg.sid)
                                 continue
                             
                             matched_keywords = _check_keywords(config.get("keywords", []), message_data["body"])
@@ -152,10 +155,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                                         message_data["sender"], 
                                         message_data["body"][:50] + "..." if len(message_data["body"]) > 50 else message_data["body"])
                             
-                            # Update last_seen_sid
-                            hass.data[DOMAIN][entry.entry_id]["last_seen_sid"] = msg.sid
+                            # Mark message as processed
+                            processed_sids.add(msg.sid)
                         
                         _LOGGER.info("SMARTSMS POLLING: Processed %d new messages", len(new_messages))
+                    
+                    # Clean up old SIDs (keep only last 1000 to prevent memory growth)
+                    if len(processed_sids) > 1000:
+                        # Convert to list, sort by age (would need message timestamps), keep newest 500
+                        # For simplicity, just clear half when we hit the limit
+                        processed_sids_list = list(processed_sids)
+                        processed_sids.clear()
+                        processed_sids.update(processed_sids_list[-500:])
+                        _LOGGER.debug("SMARTSMS POLLING: Cleaned up processed SIDs, keeping %d", len(processed_sids))
                     
                     await asyncio.sleep(60)  # Poll every 60 seconds
                     
