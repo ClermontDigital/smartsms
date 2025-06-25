@@ -18,10 +18,14 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR]
 
+# Debug: Log when module is imported
+_LOGGER.warning("SMARTSMS MODULE IMPORTED - __init__.py loaded")
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up SmartSMS from a config entry."""
-    _LOGGER.info("Setting up SmartSMS integration: %s", entry.title)
+    _LOGGER.warning("SMARTSMS SETUP STARTING: %s", entry.title)
+    _LOGGER.warning("SMARTSMS CONFIG DATA: %s", entry.data)
     
     try:
         # Initialize domain data structure
@@ -53,11 +57,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             configuration_url="https://console.twilio.com/",
         )
         
-        _LOGGER.info("SmartSMS integration setup complete: %s", entry.title)
+        _LOGGER.warning("SMARTSMS SETUP COMPLETE: %s", entry.title)
         return True
         
     except Exception as err:
-        _LOGGER.error("Failed to set up SmartSMS integration: %s", err)
+        _LOGGER.error("SMARTSMS SETUP FAILED: %s", err)
+        _LOGGER.exception("SMARTSMS FULL ERROR TRACE:")
         # Clean up on failure
         if entry.entry_id in hass.data.get(DOMAIN, {}):
             hass.data[DOMAIN].pop(entry.entry_id)
