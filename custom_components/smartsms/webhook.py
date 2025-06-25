@@ -101,13 +101,13 @@ async def handle_webhook(
         content_length = request.headers.get('content-length')
         if content_length and int(content_length) > 10000:
             _LOGGER.warning("Webhook payload too large: %s bytes", content_length)
-            return web.Response(status=413, text="Payload too large")
+            return web.Response(status=413, text="Payload too large", content_type="text/plain")
         
         # Find config entry
         entry_id = _WEBHOOK_TO_ENTRY.get(webhook_id)
         if not entry_id:
             _LOGGER.error("No config entry found for webhook ID: %s", webhook_id)
-            return web.Response(status=404, text="Webhook not found")
+            return web.Response(status=404, text="Webhook not found", content_type="text/plain")
         
         # Get config entry
         config_entry = None
@@ -118,30 +118,30 @@ async def handle_webhook(
         
         if not config_entry:
             _LOGGER.error("Config entry %s not found", entry_id)
-            return web.Response(status=404, text="Config entry not found")
+            return web.Response(status=404, text="Config entry not found", content_type="text/plain")
         
         # Parse request data
         data = await _parse_request_data(request)
         if not data:
             _LOGGER.error("Failed to parse webhook request data")
-            return web.Response(status=400, text="Invalid request data")
+            return web.Response(status=400, text="Invalid request data", content_type="text/plain")
         
         # Validate Twilio signature if enabled
         auth_token = config_entry.data.get(CONF_AUTH_TOKEN)
         if auth_token and not await _validate_twilio_signature(request, data, auth_token):
             _LOGGER.warning("Invalid Twilio signature for webhook %s", webhook_id)
-            return web.Response(status=403, text="Invalid signature")
+            return web.Response(status=403, text="Invalid signature", content_type="text/plain")
         
         # Extract message data
         message_data = _extract_message_data(data)
         if not message_data:
             _LOGGER.error("Failed to extract valid message data")
-            return web.Response(status=400, text="Invalid message data")
+            return web.Response(status=400, text="Invalid message data", content_type="text/plain")
         
         # Apply filters
         if not _should_process_message(config_entry.data, message_data):
             _LOGGER.debug("Message filtered out from %s", message_data[ATTR_SENDER])
-            return web.Response(status=200, text="Message filtered")
+            return web.Response(status=200, text="Message filtered", content_type="text/plain")
         
         # Check for keyword matches
         matched_keywords = _check_keywords(
@@ -165,11 +165,11 @@ async def handle_webhook(
             message_data[ATTR_BODY][:50] + "..." if len(message_data[ATTR_BODY]) > 50 else message_data[ATTR_BODY]
         )
         
-        return web.Response(status=200, text="OK")
+        return web.Response(status=200, text="OK", content_type="text/plain")
         
     except Exception as err:
         _LOGGER.exception("Error processing webhook %s: %s", webhook_id, err)
-        return web.Response(status=500, text="Internal server error")
+        return web.Response(status=500, text="Internal server error", content_type="text/plain")
 
 
 async def _parse_request_data(request: web.Request) -> dict[str, Any] | None:
