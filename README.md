@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![HACS Badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
-[![Version](https://img.shields.io/badge/version-0.4.8-green.svg)](https://github.com/ClermontDigital/smartsms)
+[![Version](https://img.shields.io/badge/version-0.5.0-green.svg)](https://github.com/ClermontDigital/smartsms)
 
 A simple Home Assistant integration that receives SMS messages via webhooks and exposes them as entities for automation. Currently supports SMS providers that use webhook delivery.
 
@@ -18,8 +18,8 @@ A simple Home Assistant integration that receives SMS messages via webhooks and 
 
 ### Requirements
 - Home Assistant 2024.1 or newer  
+- **Home Assistant Cloud (Nabu Casa) subscription** - Required for webhook handling
 - SMS provider with webhook support (tested with Twilio)
-- External HTTPS access to your Home Assistant instance
 
 ### Installation
 
@@ -48,9 +48,12 @@ A simple Home Assistant integration that receives SMS messages via webhooks and 
    - Configure any message filters (optional)
 
 3. **Set Up Webhook**:
-   - Copy the webhook URL from the integration setup
-   - Configure it in your SMS provider's settings
+   - After configuring the integration, go to Settings → Home Assistant Cloud → Webhooks
+   - Find your SmartSMS webhook in the list and copy its URL
+   - Configure this URL in your SMS provider's settings  
    - Send a test message to verify it works
+
+**Note**: SmartSMS uses Home Assistant Cloud's webhook routing system, which requires an active Nabu Casa subscription. The webhook URLs are managed centrally in the cloud section, not within the integration itself.
 
 ## Entities Created
 
@@ -148,10 +151,11 @@ Any SMS provider that can send POST requests to webhooks should work. The integr
 
 ### Messages Not Arriving
 
-1. **Check webhook URL**: Make sure it's configured correctly in your SMS provider
-2. **Verify external access**: Your Home Assistant must be reachable from the internet
-3. **Check logs**: Look for SmartSMS errors in Home Assistant logs
-4. **Test with curl**: Send a test POST request to your webhook URL
+1. **Check Nabu Casa**: Ensure you have an active Home Assistant Cloud subscription
+2. **Find webhook URL**: Go to Settings → Home Assistant Cloud → Webhooks to find your SmartSMS webhook URL
+3. **Check SMS provider**: Make sure the webhook URL is configured correctly in your SMS provider
+4. **Check logs**: Look for SmartSMS errors in Home Assistant logs
+5. **Test webhook**: Send a test SMS to your number to verify the complete flow
 
 ### Common Issues
 

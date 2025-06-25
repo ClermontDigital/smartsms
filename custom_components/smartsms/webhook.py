@@ -4,18 +4,17 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
-import json
 import logging
 import re
 from datetime import datetime
 from typing import Any
 from urllib.parse import parse_qs
 
-from aiohttp import web  # type: ignore
-from homeassistant.config_entries import ConfigEntry  # type: ignore
-from homeassistant.core import HomeAssistant  # type: ignore
-from homeassistant.components import webhook  # type: ignore
-from homeassistant.util import dt as dt_util  # type: ignore
+from aiohttp import web
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.components import webhook
+from homeassistant.util import dt as dt_util
 
 from .const import (
     ATTR_BODY,
@@ -25,7 +24,6 @@ from .const import (
     ATTR_SENDER,
     ATTR_TIMESTAMP,
     ATTR_TO_NUMBER,
-    BINARY_SENSOR_RESET_DELAY,
     CONF_AUTH_TOKEN,
     CONF_KEYWORDS,
     CONF_SENDER_BLACKLIST,
@@ -44,7 +42,7 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# Store webhook to config entry mapping for efficient lookup
+# Global webhook mapping for efficient lookup
 _WEBHOOK_TO_ENTRY: dict[str, str] = {}
 
 
@@ -52,147 +50,30 @@ async def async_register_webhook(hass: HomeAssistant, entry: ConfigEntry) -> Non
     """Register webhook for SMS reception."""
     webhook_id = entry.data[CONF_WEBHOOK_ID]
     
-    _LOGGER.error("🔧 WEBHOOK REGISTRATION STARTING")
-    _LOGGER.error("🔧 Webhook ID: %s", webhook_id)
-    _LOGGER.error("🔧 Entry ID: %s", entry.entry_id)
-    _LOGGER.error("🔧 Entry title: %s", entry.title)
-    
     try:
-        # Get webhook component from multiple possible locations
-        webhook_component = None
-        webhook_data = None
-        
-        # Try to find webhook component in different ways
-        if 'webhook' in hass.data:
-            webhook_data = hass.data['webhook']
-            _LOGGER.error("🔧 Found webhook in hass.data")
-        
-        # Try to get webhook component directly
+        # Check if webhook already exists
         try:
-            from homeassistant.components import webhook as webhook_component_module
-            if hasattr(webhook_component_module, '_HANDLERS'):
-                _LOGGER.error("🔧 Found _HANDLERS in webhook component module")
-            if hasattr(webhook_component_module, 'async_register'):
-                _LOGGER.error("🔧 Found async_register in webhook component module")
-        except Exception as e:
-            _LOGGER.error("🔧 Failed to inspect webhook component module: %s", e)
+            webhook.async_unregister(hass, webhook_id)
+        except ValueError:
+            # Webhook doesn't exist, which is fine
+            pass
         
-        # Check if webhook component is in hass.data
-        webhook_component = hass.data.get('webhook')
-        _LOGGER.error("🔧 Webhook component from hass.data: %s", webhook_component is not None)
-        
-        # Try to access webhook handlers in different ways
-        handlers_found = False
-        if webhook_component and hasattr(webhook_component, '_handlers'):
-            existing_handlers = webhook_component._handlers
-            _LOGGER.error("🔧 Existing webhook handlers via _handlers: %s", list(existing_handlers.keys()))
-            handlers_found = True
-            
-            if webhook_id in existing_handlers:
-                _LOGGER.error("🔧 WARNING: Webhook ID already exists - unregistering first")
-                try:
-                    webhook.async_unregister(hass, webhook_id)
-                except Exception as e:
-                    _LOGGER.warning("🔧 Failed to unregister existing webhook: %s", e)
-        
-        # Alternative method to check handlers
-        if not handlers_found:
-            try:
-                # Check if webhook integration has handlers stored elsewhere
-                webhook_integration = hass.data.get('webhook')
-                if webhook_integration:
-                    _LOGGER.error("🔧 Webhook integration exists but no _handlers attribute")
-                    _LOGGER.error("🔧 Webhook integration attributes: %s", dir(webhook_integration))
-            except Exception as e:
-                _LOGGER.error("🔧 Error inspecting webhook integration: %s", e)
-        
-        # Register webhook
-        _LOGGER.error("🔧 Calling webhook.async_register...")
+        # Register the webhook
         webhook.async_register(
             hass,
             DOMAIN,
-            f"SmartSMS Webhook ({entry.title})",
+            f"SmartSMS ({entry.title})",
             webhook_id,
             handle_webhook,
         )
-        _LOGGER.error("🔧 webhook.async_register completed")
         
         # Store mapping for efficient lookup
         _WEBHOOK_TO_ENTRY[webhook_id] = entry.entry_id
-        _LOGGER.error("🔧 Added to mapping: %s -> %s", webhook_id, entry.entry_id)
         
-        # Wait a moment for registration to complete
-        import asyncio
-        await asyncio.sleep(0.5)
-        
-        # Comprehensive verification
-        webhook_registered = False
-        
-        # Method 1: Check via webhook component
-        webhook_component_after = hass.data.get('webhook')
-        if webhook_component_after and hasattr(webhook_component_after, '_handlers'):
-            handlers_after = webhook_component_after._handlers
-            _LOGGER.error("🔧 Handlers after registration: %s", list(handlers_after.keys()))
-            if webhook_id in handlers_after:
-                _LOGGER.error("🔧 ✅ WEBHOOK FOUND IN HANDLERS LIST!")
-                handler_info = handlers_after[webhook_id]
-                _LOGGER.error("🔧 Handler details: %s", handler_info)
-                _LOGGER.error("🔧 Handler function: %s", getattr(handler_info, 'handler', 'unknown'))
-                webhook_registered = True
-            else:
-                _LOGGER.error("🔧 ❌ WEBHOOK NOT IN HANDLERS LIST!")
-                _LOGGER.error("🔧 Available handlers: %s", list(handlers_after.keys()))
-        else:
-            _LOGGER.error("🔧 ❌ Cannot access webhook handlers for verification")
-        
-        # Method 2: Check via Home Assistant's internal webhook registry
-        try:
-            from homeassistant.components.webhook import async_unregister
-            # If we can attempt to unregister and re-register, the webhook exists
-            _LOGGER.error("🔧 Testing webhook existence via unregister/register cycle...")
-            
-            # Try to unregister (this will fail if webhook doesn't exist)
-            try:
-                webhook.async_unregister(hass, webhook_id)
-                _LOGGER.error("🔧 Unregister succeeded - webhook was registered")
-                webhook_registered = True
-            except Exception as unreg_err:
-                _LOGGER.error("🔧 Unregister failed: %s - webhook may not be registered", unreg_err)
-            
-            # Re-register
-            webhook.async_register(
-                hass,
-                DOMAIN,
-                f"SmartSMS Webhook ({entry.title})",
-                webhook_id,
-                handle_webhook,
-            )
-            _LOGGER.error("🔧 Re-registered webhook after test")
-            
-        except Exception as test_err:
-            _LOGGER.error("🔧 Webhook existence test failed: %s", test_err)
-        
-        # Method 3: Generate webhook URL and log it
-        webhook_url = None
-        if hasattr(hass.config, 'external_url') and hass.config.external_url:
-            webhook_url = f"{hass.config.external_url}/api/webhook/{webhook_id}"
-        else:
-            webhook_url = f"http://localhost:8123/api/webhook/{webhook_id}"
-        
-        _LOGGER.error("🔧 Expected webhook URL: %s", webhook_url)
-        
-        # Summary
-        if webhook_registered:
-            _LOGGER.error("🔧 ✅ WEBHOOK REGISTRATION VERIFIED SUCCESSFUL")
-        else:
-            _LOGGER.error("🔧 ⚠️ WEBHOOK REGISTRATION UNCERTAIN - COULD NOT VERIFY")
-        
-        _LOGGER.error("🔧 Final webhook mapping: %s", _WEBHOOK_TO_ENTRY)
-        _LOGGER.error("🔧 WEBHOOK REGISTRATION COMPLETE")
+        _LOGGER.info("Registered SmartSMS webhook: %s", webhook_id)
         
     except Exception as err:
-        _LOGGER.error("🔧 ❌ WEBHOOK REGISTRATION EXCEPTION: %s", err)
-        _LOGGER.exception("Full exception traceback:")
+        _LOGGER.error("Failed to register webhook %s: %s", webhook_id, err)
         raise
 
 
@@ -202,10 +83,7 @@ async def async_unregister_webhook(hass: HomeAssistant, entry: ConfigEntry) -> N
     
     try:
         webhook.async_unregister(hass, webhook_id)
-        
-        # Remove from mapping
         _WEBHOOK_TO_ENTRY.pop(webhook_id, None)
-        
         _LOGGER.info("Unregistered SmartSMS webhook: %s", webhook_id)
         
     except Exception as err:
@@ -216,44 +94,22 @@ async def handle_webhook(
     hass: HomeAssistant, webhook_id: str, request: web.Request
 ) -> web.Response:
     """Handle incoming SMS webhook from Twilio."""
-    _LOGGER.error("🚀 WEBHOOK HANDLER CALLED!")
-    _LOGGER.error("🚀 Webhook ID: %s", webhook_id)
-    _LOGGER.error("🚀 Request method: %s", request.method)
-    _LOGGER.error("🚀 Request URL: %s", request.url)
-    _LOGGER.error("🚀 Request headers: %s", dict(request.headers))
-    _LOGGER.error("🚀 All webhook mappings: %s", _WEBHOOK_TO_ENTRY)
-    _LOGGER.error("🚀 Request remote address: %s", request.remote)
-    _LOGGER.error("🚀 Request transport info: %s", getattr(request, 'transport', 'unknown'))
-    
-    # Fire a test event to see if this handler is being called at all
-    hass.bus.async_fire("smartsms_webhook_test", {
-        "webhook_id": webhook_id,
-        "method": request.method,
-        "url": str(request.url),
-        "timestamp": dt_util.utcnow().isoformat(),
-        "remote": str(request.remote),
-        "headers": dict(request.headers)
-    })
-    
-    # Log that we received the webhook call
-    _LOGGER.info("SmartSMS webhook handler called - webhook_id: %s, method: %s", webhook_id, request.method)
+    _LOGGER.debug("SmartSMS webhook called: %s", webhook_id)
     
     try:
-        # Security check: payload size limit
-        content_length = getattr(request, 'content_length', None)
-        _LOGGER.error("🚀 Content length: %s", content_length)
-        if content_length and content_length > 10000:  # 10KB limit
+        # Security: Check payload size
+        content_length = request.headers.get('content-length')
+        if content_length and int(content_length) > 10000:
             _LOGGER.warning("Webhook payload too large: %s bytes", content_length)
             return web.Response(status=413, text="Payload too large")
         
-        # Find config entry efficiently
+        # Find config entry
         entry_id = _WEBHOOK_TO_ENTRY.get(webhook_id)
-        _LOGGER.error("🚀 Found entry_id for webhook: %s", entry_id)
         if not entry_id:
             _LOGGER.error("No config entry found for webhook ID: %s", webhook_id)
-            _LOGGER.error("Available mappings: %s", _WEBHOOK_TO_ENTRY)
             return web.Response(status=404, text="Webhook not found")
         
+        # Get config entry
         config_entry = None
         for entry in hass.config_entries.async_entries(DOMAIN):
             if entry.entry_id == entry_id:
@@ -261,59 +117,26 @@ async def handle_webhook(
                 break
         
         if not config_entry:
-            _LOGGER.error("Config entry %s not found for webhook %s", entry_id, webhook_id)
+            _LOGGER.error("Config entry %s not found", entry_id)
             return web.Response(status=404, text="Config entry not found")
         
-        _LOGGER.error("🚀 Found config entry: %s", config_entry.title)
-        
-        # Parse request data properly (only consume body once)
+        # Parse request data
         data = await _parse_request_data(request)
         if not data:
             _LOGGER.error("Failed to parse webhook request data")
             return web.Response(status=400, text="Invalid request data")
         
-        _LOGGER.error("🚀 Parsed webhook data: %s", data)
-        
-        # Check if this is a test message (contains our test data)
-        if data.get("Body") == "Test+from+curl" or data.get("Body") == "Test from curl":
-            _LOGGER.error("🚀 🧪 DETECTED TEST MESSAGE FROM CURL!")
-            # Create a test response that we can see in Home Assistant
-            test_message_data = {
-                ATTR_BODY: "Webhook Test Successful",
-                ATTR_SENDER: data.get("From", "+TEST"),
-                ATTR_TO_NUMBER: data.get("To", "+TEST"),
-                ATTR_MESSAGE_SID: data.get("MessageSid", "TEST"),
-                ATTR_TIMESTAMP: dt_util.utcnow().isoformat(),
-                ATTR_PROVIDER: "test",
-            }
-            
-            # Fire events
-            hass.bus.async_fire(EVENT_MESSAGE_RECEIVED, test_message_data)
-            hass.bus.async_fire("smartsms_test_success", {
-                "message": "Webhook is working!",
-                "timestamp": dt_util.utcnow().isoformat(),
-                "webhook_id": webhook_id
-            })
-            
-            # Update entities
-            await _update_entities(hass, config_entry.entry_id, test_message_data)
-            
-            _LOGGER.error("🚀 ✅ TEST MESSAGE PROCESSED SUCCESSFULLY!")
-            return web.Response(status=200, text="Test message processed successfully", content_type="text/plain")
-        
         # Validate Twilio signature if enabled
         auth_token = config_entry.data.get(CONF_AUTH_TOKEN)
-        if False and auth_token and not _validate_twilio_signature(request, data, auth_token):
+        if auth_token and not await _validate_twilio_signature(request, data, auth_token):
             _LOGGER.warning("Invalid Twilio signature for webhook %s", webhook_id)
             return web.Response(status=403, text="Invalid signature")
         
-        # Extract and validate message data
+        # Extract message data
         message_data = _extract_message_data(data)
         if not message_data:
             _LOGGER.error("Failed to extract valid message data")
             return web.Response(status=400, text="Invalid message data")
-        
-        _LOGGER.error("🚀 Extracted message from %s: %s", message_data[ATTR_SENDER], message_data[ATTR_BODY])
         
         # Apply filters
         if not _should_process_message(config_entry.data, message_data):
@@ -336,74 +159,56 @@ async def handle_webhook(
         # Update entities
         await _update_entities(hass, config_entry.entry_id, message_data)
         
-        _LOGGER.error("🚀 ✅ MESSAGE PROCESSED SUCCESSFULLY!")
-        _LOGGER.info("Processed SMS from %s: %s", 
-                    message_data[ATTR_SENDER], 
-                    message_data[ATTR_BODY][:50] + "..." if len(message_data[ATTR_BODY]) > 50 else message_data[ATTR_BODY])
+        _LOGGER.info(
+            "Processed SMS from %s: %s", 
+            message_data[ATTR_SENDER], 
+            message_data[ATTR_BODY][:50] + "..." if len(message_data[ATTR_BODY]) > 50 else message_data[ATTR_BODY]
+        )
         
-        return web.Response(status=200, text="Message processed", content_type="text/plain")
+        return web.Response(status=200, text="OK")
         
     except Exception as err:
-        _LOGGER.exception("🚀 ❌ ERROR processing webhook %s: %s", webhook_id, err)
+        _LOGGER.exception("Error processing webhook %s: %s", webhook_id, err)
         return web.Response(status=500, text="Internal server error")
 
 
 async def _parse_request_data(request: web.Request) -> dict[str, Any] | None:
     """Parse request data from various formats."""
     try:
+        # Read body only once
+        body = await request.read()
+        body_str = body.decode('utf-8')
+        
         # Try form data first (most common for Twilio)
-        try:
-            form_data = await request.post()
-            if form_data:
-                data = dict(form_data)
-                _LOGGER.error("🚀 Successfully parsed as form data: %s", data)
-                return data
-        except Exception as e:
-            _LOGGER.debug("Form data parsing failed: %s", e)
+        if request.content_type == 'application/x-www-form-urlencoded':
+            return dict(parse_qs(body_str, keep_blank_values=True))
         
-        # Try raw text parsing
-        try:
-            body_text = await request.text()
-            if body_text:
-                _LOGGER.error("🚀 Raw body text: %s", body_text)
-                
-                # Try URL-encoded parsing
-                parsed_data = parse_qs(body_text)
-                if parsed_data:
-                    # Convert lists to single values
-                    data = {k: v[0] if v else '' for k, v in parsed_data.items()}
-                    _LOGGER.error("🚀 Successfully parsed as URL-encoded text: %s", data)
-                    return data
-                
-                # Try JSON parsing
-                data = json.loads(body_text)
-                _LOGGER.error("🚀 Successfully parsed as JSON: %s", data)
-                return data
-        except Exception as e:
-            _LOGGER.debug("Text parsing failed: %s", e)
+        # Try JSON
+        if 'json' in request.content_type:
+            import json
+            return json.loads(body_str)
         
-        _LOGGER.warning("Unable to parse request data")
-        return None
+        # Manual parse for form data
+        return dict(parse_qs(body_str, keep_blank_values=True))
         
     except Exception as err:
-        _LOGGER.error("Critical error parsing request: %s", err)
+        _LOGGER.error("Error parsing request data: %s", err)
         return None
 
 
-def _validate_twilio_signature(request: web.Request, data: dict[str, Any], auth_token: str) -> bool:
+async def _validate_twilio_signature(
+    request: web.Request, data: dict[str, Any], auth_token: str
+) -> bool:
     """Validate Twilio webhook signature."""
     try:
         signature = request.headers.get("X-Twilio-Signature")
         if not signature:
-            _LOGGER.debug("No X-Twilio-Signature header found")
             return False
         
-        # Get the full URL
+        # Get URL and sorted data for signature
         url = str(request.url)
-        
-        # Reconstruct the body for signature validation
         sorted_data = sorted(data.items())
-        body = "&".join([f"{k}={v}" for k, v in sorted_data])
+        body = "&".join([f"{k}={v[0] if isinstance(v, list) else v}" for k, v in sorted_data])
         
         # Calculate expected signature
         expected_signature = base64.b64encode(
@@ -414,11 +219,7 @@ def _validate_twilio_signature(request: web.Request, data: dict[str, Any], auth_
             ).digest()
         ).decode()
         
-        is_valid = hmac.compare_digest(signature, expected_signature)
-        if not is_valid:
-            _LOGGER.warning("Signature validation failed")
-        
-        return is_valid
+        return hmac.compare_digest(signature, expected_signature)
         
     except Exception as err:
         _LOGGER.error("Error validating Twilio signature: %s", err)
@@ -426,49 +227,45 @@ def _validate_twilio_signature(request: web.Request, data: dict[str, Any], auth_
 
 
 def _extract_message_data(data: dict[str, Any]) -> dict[str, Any] | None:
-    """Extract message data from Twilio webhook payload."""
+    """Extract SMS message data from webhook payload."""
     try:
-        body = data.get(TWILIO_BODY, "")
-        sender = data.get(TWILIO_FROM, "")
-        to_number = data.get(TWILIO_TO, "")
-        message_sid = data.get(TWILIO_MESSAGE_SID, "")
-        timestamp = data.get(TWILIO_TIMESTAMP)
+        # Handle list values from form parsing
+        def get_value(key: str) -> str:
+            value = data.get(key, "")
+            if isinstance(value, list):
+                return value[0] if value else ""
+            return str(value)
         
-        # Validate required fields
+        # Extract Twilio fields
+        body = get_value(TWILIO_BODY)
+        sender = get_value(TWILIO_FROM)
+        to_number = get_value(TWILIO_TO)
+        
         if not body or not sender:
-            _LOGGER.warning("Missing required fields: body=%s, sender=%s", bool(body), bool(sender))
+            _LOGGER.error("Missing required fields: Body=%s, From=%s", body, sender)
             return None
         
-        # Input validation
-        if len(body) > 1600:  # SMS length limit
-            _LOGGER.warning("Message body too long: %d chars", len(body))
-            body = body[:1600]
-        
         # Parse timestamp
-        timestamp_iso = dt_util.utcnow().isoformat()
-        if timestamp:
+        timestamp_str = get_value(TWILIO_TIMESTAMP)
+        if timestamp_str:
             try:
-                for fmt in [
-                    "%Y-%m-%d %H:%M:%S",
-                    "%a, %d %b %Y %H:%M:%S %z",
-                    "%Y-%m-%dT%H:%M:%S.%fZ",
-                    "%Y-%m-%dT%H:%M:%SZ"
-                ]:
-                    try:
-                        parsed_timestamp = datetime.strptime(timestamp, fmt)
-                        timestamp_iso = parsed_timestamp.isoformat()
-                        break
-                    except ValueError:
-                        continue
-            except Exception as e:
-                _LOGGER.debug("Failed to parse timestamp '%s': %s", timestamp, e)
+                # Try parsing Twilio timestamp format
+                timestamp = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=dt_util.UTC)
+            except ValueError:
+                timestamp = dt_util.utcnow()
+        else:
+            timestamp = dt_util.utcnow()
+        
+        # Validate phone numbers
+        if not _is_valid_phone(sender) or not _is_valid_phone(to_number):
+            _LOGGER.warning("Invalid phone number format: From=%s, To=%s", sender, to_number)
         
         return {
-            ATTR_BODY: body,
+            ATTR_BODY: body[:1000],  # Limit message length
             ATTR_SENDER: sender,
             ATTR_TO_NUMBER: to_number,
-            ATTR_MESSAGE_SID: message_sid,
-            ATTR_TIMESTAMP: timestamp_iso,
+            ATTR_MESSAGE_SID: get_value(TWILIO_MESSAGE_SID),
+            ATTR_TIMESTAMP: timestamp.isoformat(),
             ATTR_PROVIDER: "twilio",
         }
         
@@ -477,17 +274,26 @@ def _extract_message_data(data: dict[str, Any]) -> dict[str, Any] | None:
         return None
 
 
-def _should_process_message(config_data: dict[str, Any], message_data: dict[str, Any]) -> bool:
+def _is_valid_phone(phone: str) -> bool:
+    """Validate phone number format."""
+    if not phone:
+        return False
+    # Basic phone validation - starts with + and contains only digits
+    return bool(re.match(r'^\+[1-9]\d{1,14}$', phone))
+
+
+def _should_process_message(config: dict[str, Any], message_data: dict[str, Any]) -> bool:
     """Check if message should be processed based on filters."""
     sender = message_data[ATTR_SENDER]
+    body = message_data[ATTR_BODY]
     
-    # Check whitelist
-    whitelist = config_data.get(CONF_SENDER_WHITELIST, [])
+    # Whitelist check (if configured, only allow these)
+    whitelist = config.get(CONF_SENDER_WHITELIST, [])
     if whitelist and sender not in whitelist:
         return False
     
-    # Check blacklist
-    blacklist = config_data.get(CONF_SENDER_BLACKLIST, [])
+    # Blacklist check (never allow these)
+    blacklist = config.get(CONF_SENDER_BLACKLIST, [])
     if blacklist and sender in blacklist:
         return False
     
@@ -495,25 +301,23 @@ def _should_process_message(config_data: dict[str, Any], message_data: dict[str,
 
 
 def _check_keywords(keywords: list[str], message_body: str) -> list[str]:
-    """Check if message contains any keywords and return matches."""
-    if not keywords:
-        return []
-    
+    """Check for keyword matches in message body."""
     matched = []
     message_lower = message_body.lower()
     
     for keyword in keywords:
-        try:
-            if keyword.startswith("regex:"):
-                pattern = keyword[6:]  # Remove 'regex:' prefix
+        if keyword.startswith("regex:"):
+            # Regex pattern matching
+            pattern = keyword[6:]  # Remove 'regex:' prefix
+            try:
                 if re.search(pattern, message_body, re.IGNORECASE):
                     matched.append(keyword)
-            else:
-                # Simple case-insensitive substring match
-                if keyword.lower() in message_lower:
-                    matched.append(keyword)
-        except re.error as e:
-            _LOGGER.warning("Invalid regex pattern '%s': %s", keyword, e)
+            except re.error:
+                _LOGGER.warning("Invalid regex pattern: %s", pattern)
+        else:
+            # Simple keyword matching
+            if keyword.lower() in message_lower:
+                matched.append(keyword)
     
     return matched
 
@@ -527,8 +331,6 @@ async def _update_entities(hass: HomeAssistant, entry_id: str, message_data: dic
         
         if data_store:
             data_store.store_message(message_data)
-        else:
-            _LOGGER.warning("No data store found for entry %s", entry_id)
         
         # Fire update event for entities
         hass.bus.async_fire(f"{DOMAIN}_data_updated", {"entry_id": entry_id})
