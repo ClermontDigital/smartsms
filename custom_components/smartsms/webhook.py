@@ -11,11 +11,11 @@ from datetime import datetime
 from typing import Any
 from urllib.parse import parse_qs
 
-from aiohttp import web
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.components import webhook
-from homeassistant.util import dt as dt_util
+from aiohttp import web  # type: ignore
+from homeassistant.config_entries import ConfigEntry  # type: ignore
+from homeassistant.core import HomeAssistant  # type: ignore
+from homeassistant.components import webhook  # type: ignore
+from homeassistant.util import dt as dt_util  # type: ignore
 
 from .const import (
     ATTR_BODY,

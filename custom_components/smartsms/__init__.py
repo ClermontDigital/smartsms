@@ -4,11 +4,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform, EVENT_HOMEASSISTANT_STARTED
-from homeassistant.core import HomeAssistant, Event
-from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers import device_registry as dr
+from homeassistant.config_entries import ConfigEntry  # type: ignore
+from homeassistant.const import Platform, EVENT_HOMEASSISTANT_STARTED  # type: ignore
+from homeassistant.core import HomeAssistant, Event  # type: ignore
+from homeassistant.exceptions import ConfigEntryNotReady  # type: ignore
+from homeassistant.helpers import device_registry as dr  # type: ignore
 
 from .const import DOMAIN
 from .data_store import SmartSMSDataStore

@@ -6,8 +6,8 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any
 
-from homeassistant.core import HomeAssistant
-from homeassistant.util import dt as dt_util
+from homeassistant.core import HomeAssistant  # type: ignore
+from homeassistant.util import dt as dt_util  # type: ignore
 
 from .const import DEFAULT_MESSAGE_RETENTION_DAYS, DOMAIN
 

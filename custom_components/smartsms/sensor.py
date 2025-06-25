@@ -4,15 +4,15 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from homeassistant.components.sensor import (
+from homeassistant.components.sensor import (  # type: ignore
     SensorEntity,
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity import DeviceInfo, EntityCategory
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.config_entries import ConfigEntry  # type: ignore
+from homeassistant.core import HomeAssistant, callback  # type: ignore
+from homeassistant.helpers.entity import DeviceInfo, EntityCategory  # type: ignore
+from homeassistant.helpers.entity_platform import AddEntitiesCallback  # type: ignore
 
 
 from .const import (

@@ -7,10 +7,10 @@ import string
 from typing import Any
 
 import voluptuous as vol
-from homeassistant import config_entries
-from homeassistant.const import CONF_NAME
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.data_entry_flow import FlowResult
+from homeassistant import config_entries  # type: ignore
+from homeassistant.const import CONF_NAME  # type: ignore
+from homeassistant.core import HomeAssistant, callback  # type: ignore
+from homeassistant.data_entry_flow import FlowResult  # type: ignore
 
 from .const import (
     CONF_ACCOUNT_SID,
