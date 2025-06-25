@@ -97,8 +97,12 @@ class SmartSMSSensor(SensorEntity):
         
         if self.entity_description.key == SENSOR_LAST_MESSAGE:
             body = latest_message.get(ATTR_BODY, "")
-            # Truncate long messages for the state
-            return body[:255] if body else None
+            if body:
+                # Sanitize markdown characters to prevent formatting issues
+                sanitized_body = self._sanitize_text(body)
+                # Truncate long messages for the state
+                return sanitized_body[:255]
+            return None
         
         elif self.entity_description.key == SENSOR_LAST_SENDER:
             return latest_message.get(ATTR_SENDER)
@@ -124,8 +128,10 @@ class SmartSMSSensor(SensorEntity):
         
         if self.entity_description.key == SENSOR_LAST_MESSAGE:
             # For message sensor, include full message and metadata
+            raw_body = latest_message.get(ATTR_BODY, "")
             attributes = {
-                "full_message": latest_message.get(ATTR_BODY, ""),
+                "full_message": self._sanitize_text(raw_body) if raw_body else "",
+                "raw_message": raw_body,  # Keep original for automations that might need it
                 ATTR_SENDER: latest_message.get(ATTR_SENDER),
                 ATTR_TIMESTAMP: latest_message.get(ATTR_TIMESTAMP),
                 ATTR_MESSAGE_SID: latest_message.get(ATTR_MESSAGE_SID),
@@ -140,8 +146,13 @@ class SmartSMSSensor(SensorEntity):
         elif self.entity_description.key == SENSOR_LAST_SENDER:
             # For sender sensor, include message preview and timestamp
             body = latest_message.get(ATTR_BODY, "")
+            if body:
+                sanitized_body = self._sanitize_text(body)
+                preview = sanitized_body[:100] + "..." if len(sanitized_body) > 100 else sanitized_body
+            else:
+                preview = ""
             attributes = {
-                "message_preview": body[:100] + "..." if len(body) > 100 else body,
+                "message_preview": preview,
                 ATTR_TIMESTAMP: latest_message.get(ATTR_TIMESTAMP),
                 ATTR_MESSAGE_SID: latest_message.get(ATTR_MESSAGE_SID),
                 ATTR_TO_NUMBER: latest_message.get(ATTR_TO_NUMBER),
@@ -182,6 +193,26 @@ class SmartSMSSensor(SensorEntity):
         # Only update if this event is for our config entry
         if event.data.get("entry_id") == self._entry.entry_id:
             self.async_write_ha_state()
+
+    def _sanitize_text(self, text: str) -> str:
+        """Sanitize text to prevent markdown formatting issues in Home Assistant UI."""
+        if not text:
+            return text
+        
+        # Use HTML entities to prevent markdown interpretation
+        # This should work better with Home Assistant's UI rendering
+        import html
+        
+        # First HTML escape the text
+        sanitized = html.escape(text)
+        
+        # Then replace remaining problematic characters with safe alternatives
+        # Using visually similar Unicode characters that won't trigger markdown
+        sanitized = sanitized.replace('*', '•')  # Bullet point instead of asterisk
+        sanitized = sanitized.replace('_', '—')  # Em dash instead of underscore
+        sanitized = sanitized.replace('`', "'")  # Single quote instead of backtick
+        
+        return sanitized
 
     async def async_update(self) -> None:
         """Update the sensor."""
