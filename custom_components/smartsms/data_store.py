@@ -27,6 +27,10 @@ class SmartSMSDataStore:
     def store_message(self, message_data: dict[str, Any]) -> None:
         """Store a new message and update counters."""
         try:
+            # DEBUG: Log what's being stored
+            body = message_data.get("body", "")
+            _LOGGER.error("DATA STORE - Storing message body: %r (len=%d)", body, len(body))
+            
             # Get or create entry data
             entry_data = self._get_entry_data()
             

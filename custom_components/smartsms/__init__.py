@@ -177,6 +177,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         for msg in new_messages:
                             _LOGGER.info("SMARTSMS POLLING: Processing message SID %s from %s", msg.sid, msg.from_)
                             
+                            # DEBUG: Inspect the raw Twilio message object
+                            _LOGGER.error("TWILIO MSG OBJECT DEBUG:")
+                            _LOGGER.error("  msg.body type: %s", type(msg.body))
+                            _LOGGER.error("  msg.body raw: %r", msg.body)
+                            _LOGGER.error("  msg.body length: %d", len(msg.body) if msg.body else 0)
+                            
+                            # Show each character with its ASCII code
+                            if msg.body:
+                                char_debug = []
+                                for i, char in enumerate(msg.body):
+                                    char_debug.append(f"[{i}]='{char}'({ord(char)})")
+                                _LOGGER.error("  Character breakdown: %s", ' '.join(char_debug[:50]))  # First 50 chars
+                            
                             # Sanitize message body to prevent markdown formatting issues
                             raw_body = msg.body[:1000] if msg.body else ""
                             _LOGGER.warning("SMARTSMS RAW MESSAGE: '%s' (len=%d, repr=%r)", raw_body, len(raw_body), raw_body)
