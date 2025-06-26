@@ -1,0 +1,34 @@
+send_sms:
+  name: Send SMS
+  description: Send an SMS message via Mobile Message API
+  fields:
+    to:
+      name: To Number
+      description: Phone number to send SMS to (e.g., +61412345678 or 0412345678)
+      required: true
+      example: "+61412345678"
+      selector:
+        text:
+    message:
+      name: Message
+      description: SMS message content (maximum 765 characters)
+      required: true
+      example: "Hello from Home Assistant!"
+      selector:
+        text:
+          multiline: true
+          type: text
+    sender:
+      name: Sender ID
+      description: Sender ID or phone number (optional if default sender is configured)
+      required: false
+      example: "MyCompany"
+      selector:
+        text:
+    custom_ref:
+      name: Custom Reference
+      description: Optional custom reference for tracking this message
+      required: false
+      example: "automation_123"
+      selector:
+        text: 

@@ -172,22 +172,61 @@ async def handle_webhook(
 async def _parse_request_data(request: web.Request) -> dict[str, Any] | None:
     """Parse request data from Mobile Message webhook (JSON format)."""
     try:
-        # Read body only once
-        body = await request.read()
+        _LOGGER.debug("Request object type: %s", type(request))
+        _LOGGER.debug("Request headers: %s", dict(request.headers) if hasattr(request, 'headers') else 'No headers')
+        _LOGGER.debug("Request content type: %s", getattr(request, 'content_type', 'Unknown'))
         
-        # Try different encodings if UTF-8 fails
-        try:
-            body_str = body.decode('utf-8')
-        except UnicodeDecodeError:
+        # Handle different request types safely
+        body = b''
+        body_str = ''
+        
+        # Try to read body - handle different request object types
+        if hasattr(request, 'read'):
             try:
-                body_str = body.decode('latin-1')
-                _LOGGER.warning("Using latin-1 encoding for webhook data")
+                body = await request.read()
+                _LOGGER.debug("Read body bytes: %d", len(body))
+            except Exception as e:
+                _LOGGER.error("Failed to read request body: %s", e)
+                return None
+        elif hasattr(request, 'text'):
+            try:
+                body_str = await request.text()
+                _LOGGER.debug("Got body text directly: %d chars", len(body_str))
+            except Exception as e:
+                _LOGGER.error("Failed to get request text: %s", e)
+                return None
+        elif hasattr(request, 'json'):
+            try:
+                # Direct JSON parsing if available
+                return await request.json()
+            except Exception as e:
+                _LOGGER.error("Failed to parse JSON directly: %s", e)
+                return None
+        else:
+            _LOGGER.error("Request object has no readable methods: %s", dir(request))
+            return None
+        
+        # Convert bytes to string if we got bytes
+        if body and not body_str:
+            try:
+                body_str = body.decode('utf-8')
             except UnicodeDecodeError:
-                body_str = body.decode('utf-8', errors='replace')
-                _LOGGER.warning("Using UTF-8 with error replacement for webhook data")
+                try:
+                    body_str = body.decode('latin-1')
+                    _LOGGER.warning("Using latin-1 encoding for webhook data")
+                except UnicodeDecodeError:
+                    body_str = body.decode('utf-8', errors='replace')
+                    _LOGGER.warning("Using UTF-8 with error replacement for webhook data")
+        
+        _LOGGER.debug("Body string: %s", body_str[:500] if body_str else 'Empty')
+        
+        if not body_str:
+            _LOGGER.error("Empty request body")
+            return None
         
         # Mobile Message sends JSON data
-        if 'json' in request.content_type or request.content_type == 'application/json':
+        content_type = getattr(request, 'content_type', '').lower()
+        if 'json' in content_type or content_type == 'application/json':
             import json
             return json.loads(body_str)
         
@@ -200,7 +239,7 @@ async def _parse_request_data(request: web.Request) -> dict[str, Any] | None:
             return None
         
     except Exception as err:
-        _LOGGER.error("Error parsing request data: %s", err)
+        _LOGGER.exception("Error parsing request data: %s", err)
         return None
 
 

@@ -14,6 +14,12 @@ CONF_SENDER_WHITELIST: Final = "sender_whitelist"
 CONF_SENDER_BLACKLIST: Final = "sender_blacklist"
 CONF_KEYWORDS: Final = "keywords"
 
+# SMS Sending
+CONF_DEFAULT_SENDER: Final = "default_sender"
+SERVICE_SEND_SMS: Final = "send_sms"
+MM_API_BASE_URL: Final = "https://api.mobilemessage.com.au"
+MM_SEND_ENDPOINT: Final = "/v1/messages"
+
 # Entity names
 SENSOR_LAST_MESSAGE: Final = "last_message"
 SENSOR_LAST_SENDER: Final = "last_sender"

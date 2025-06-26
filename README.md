@@ -2,18 +2,19 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![HACS Badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
-[![Version](https://img.shields.io/badge/version-0.9.1-green.svg)](https://github.com/ClermontDigital/smartsms)
+[![Version](https://img.shields.io/badge/version-0.9.3-green.svg)](https://github.com/ClermontDigital/smartsms)
 
-A Home Assistant integration that receives SMS messages via Mobile Message webhook API and exposes them as entities for automation. Designed to work with Home Assistant Cloud (Nabu Casa) webhooks for reliable real-time SMS processing.
+A Home Assistant integration that receives and sends SMS messages via Mobile Message API. Receives messages through real-time webhooks and sends messages using the Mobile Message SMS API. Designed to work with Home Assistant Cloud (Nabu Casa) webhooks for reliable two-way SMS communication.
 
 ## What It Does
 
-- **Receives SMS** messages through Twilio API polling (every 60 seconds)
+- **Receives SMS** messages through Mobile Message webhook API (real-time)
+- **Sends SMS** messages using the `smartsms.send_sms` service
 - **Creates entities** in Home Assistant with message content and sender info
 - **Triggers automations** when new messages arrive
 - **Filters messages** by sender or keywords if needed
 - **Stores message history** for a configurable period
-- **Works with Nabu Casa** - no webhook configuration needed
+- **Works with Nabu Casa** for reliable webhook delivery
 
 ## Quick Start
 
@@ -91,6 +92,31 @@ This approach bypasses the known issues with Twilio webhooks and Home Assistant 
 - **`smartsms_message_received`** - Fired for every message with full details
 - **`smartsms_keyword_matched`** - Fired when configured keywords are detected
 
+## Sending SMS
+
+The integration provides a `smartsms.send_sms` service for sending SMS messages:
+
+### Service Parameters
+- **`to`** (required): Phone number to send to (e.g., `+61412345678` or `0412345678`)
+- **`message`** (required): SMS content (maximum 765 characters)
+- **`sender`** (optional): Sender ID - uses default sender if not specified
+- **`custom_ref`** (optional): Custom reference for tracking
+
+### Example Usage
+```yaml
+service: smartsms.send_sms
+data:
+  to: "+61412345678"
+  message: "Hello from Home Assistant!"
+  sender: "MyCompany"
+  custom_ref: "notification_123"
+```
+
+### Setup Requirements
+1. Configure a **Default Sender ID** during setup (optional but recommended)
+2. Ensure your Mobile Message account has SMS sending credits
+3. Your sender ID must be registered with Mobile Message (or use your phone number)
+
 ## Automation Examples
 
 ### Basic New Message Trigger
@@ -141,6 +167,39 @@ automation:
           entity_id: input_text.latest_verification_code
         data:
           value: "{{ trigger.event.data.body | regex_findall('\\b\\d{4,8}\\b') | first }}"
+```
+
+### Send SMS Notification
+```yaml
+automation:
+  - alias: "Send SMS Alert"
+    trigger:
+      - platform: state
+        entity_id: alarm_control_panel.home
+        to: "triggered"
+    action:
+      - service: smartsms.send_sms
+        data:
+          to: "+61412345678"
+          message: "🚨 Home alarm triggered at {{ now().strftime('%Y-%m-%d %H:%M') }}"
+          custom_ref: "alarm_{{ now().timestamp() }}"
+```
+
+### Auto-reply to SMS
+```yaml
+automation:
+  - alias: "SMS Auto-reply"
+    trigger:
+      - platform: event
+        event_type: smartsms_message_received
+    condition:
+      - condition: template
+        value_template: "{{ 'status' in trigger.event.data.body.lower() }}"
+    action:
+      - service: smartsms.send_sms
+        data:
+          to: "{{ trigger.event.data.sender }}"
+          message: "Home Assistant status: All systems operational. Temperature: {{ states('sensor.temperature') }}°C"
 ```
 
 ### Forward SMS to Signal

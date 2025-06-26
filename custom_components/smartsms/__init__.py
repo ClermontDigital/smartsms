@@ -13,6 +13,7 @@ from homeassistant.helpers import device_registry as dr
 from .const import DOMAIN
 from .data_store import SmartSMSDataStore
 from .webhook import async_register_webhook, async_unregister_webhook
+from .sms_service import async_register_services, async_unregister_services
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,6 +42,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         
         # Register webhook
         await async_register_webhook(hass, entry)
+        
+        # Register SMS sending services
+        await async_register_services(hass, entry)
         
         # Setup platforms
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -77,6 +81,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         
         # Unregister webhook
         await async_unregister_webhook(hass, entry)
+        
+        # Unregister SMS sending services
+        await async_unregister_services(hass)
         
         # Unload platforms
         unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

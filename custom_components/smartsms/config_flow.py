@@ -15,6 +15,7 @@ from homeassistant.data_entry_flow import FlowResult  # type: ignore
 from .const import (
     CONF_API_PASSWORD,
     CONF_API_USERNAME,
+    CONF_DEFAULT_SENDER,
     CONF_KEYWORDS,
     CONF_SENDER_BLACKLIST,
     CONF_SENDER_WHITELIST,
@@ -122,6 +123,8 @@ class SmartSMSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self.data[CONF_SENDER_BLACKLIST] = sender_blacklist
             if keywords:
                 self.data[CONF_KEYWORDS] = keywords
+            if user_input.get(CONF_DEFAULT_SENDER):
+                self.data[CONF_DEFAULT_SENDER] = user_input[CONF_DEFAULT_SENDER].strip()
             
             # Create the config entry
             return self.async_create_entry(
@@ -132,6 +135,7 @@ class SmartSMSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="filters",
             data_schema=vol.Schema({
+                vol.Optional(CONF_DEFAULT_SENDER): str,
                 vol.Optional(CONF_SENDER_WHITELIST): str,
                 vol.Optional(CONF_SENDER_BLACKLIST): str,
                 vol.Optional(CONF_KEYWORDS): str,
@@ -191,6 +195,7 @@ class SmartSMSOptionsFlow(config_entries.OptionsFlow):
         webhook_url = f"{base_url}/api/webhook/{webhook_id}"
 
         # Get current filters
+        current_default_sender = self._config_entry.data.get(CONF_DEFAULT_SENDER, "")
         current_whitelist = ", ".join(self._config_entry.data.get(CONF_SENDER_WHITELIST, []))
         current_blacklist = ", ".join(self._config_entry.data.get(CONF_SENDER_BLACKLIST, []))
         current_keywords = ", ".join(self._config_entry.data.get(CONF_KEYWORDS, []))
@@ -198,6 +203,7 @@ class SmartSMSOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
+                vol.Optional(CONF_DEFAULT_SENDER, default=current_default_sender): str,
                 vol.Optional(CONF_SENDER_WHITELIST, default=current_whitelist): str,
                 vol.Optional(CONF_SENDER_BLACKLIST, default=current_blacklist): str,
                 vol.Optional(CONF_KEYWORDS, default=current_keywords): str,
