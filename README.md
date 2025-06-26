@@ -52,8 +52,8 @@ data:
 
 ### Sending SMS Examples
 
-**Developer Tools - Services:**
-1. Go to Developer Tools → Services
+**Developer Tools - Actions:**
+1. Go to Developer Tools → Actions
 2. Choose `smartsms.send_sms`
 3. Fill in the form:
    - **To**: `+61412345678`
