@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![HACS Badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
-[![Version](https://img.shields.io/badge/version-0.9.3-green.svg)](https://github.com/ClermontDigital/smartsms)
+[![Version](https://img.shields.io/badge/version-0.9.4-green.svg)](https://github.com/ClermontDigital/smartsms)
 
 A Home Assistant integration that receives and sends SMS messages via Mobile Message API. Receives messages through real-time webhooks and sends messages using the Mobile Message SMS API. Designed to work with Home Assistant Cloud (Nabu Casa) webhooks for reliable two-way SMS communication.
 
@@ -20,8 +20,9 @@ A Home Assistant integration that receives and sends SMS messages via Mobile Mes
 
 ### Requirements
 - Home Assistant 2024.1 or newer  
-- **Twilio account** with SMS-capable phone number
-- Internet connectivity for API polling
+- **Mobile Message account** with SMS-capable phone number
+- Home Assistant Cloud (Nabu Casa) for webhook delivery
+- Internet connectivity for real-time webhook processing
 
 ### Installation
 
@@ -43,7 +44,7 @@ A Home Assistant integration that receives and sends SMS messages via Mobile Mes
 3. **Add Integration**:
    - Go to Settings → Devices & Services → **Add Integration**
    - Search for "SmartSMS"
-   - Enter your Twilio credentials
+   - Enter your Mobile Message credentials
 
 **Method 2: Manual**
 1. Download the latest release from GitHub
@@ -53,32 +54,35 @@ A Home Assistant integration that receives and sends SMS messages via Mobile Mes
 
 ### Configuration
 
-1. **Get Twilio Credentials**:
-   - Account SID (starts with `AC...`, 34 characters)
-   - Auth Token (32 characters, found under Account SID)
+1. **Get Mobile Message Credentials**:
+   - Sign up at [Mobile Message](https://mobilemessage.com.au/)
+   - Get API Username and Password from account settings
+   - Get a dedicated SMS number (free with the first credit purchase)
 
 2. **Add Integration**:
    - Go to Settings → Devices & Services → Add Integration
    - Search for "SmartSMS"
-   - Enter your Twilio credentials
-   - Configure any message filters (optional)
+   - Enter your Mobile Message API credentials
+   - Configure webhook and message filters
+   - Copy the webhook URL to your Mobile Message account
 
 3. **Test**:
-   - Send an SMS to your Twilio phone number
-   - Check that entities update within 60 seconds
-   - Messages are polled automatically - no webhook setup needed
+   - Send an SMS to your Mobile Message phone number
+   - Check that entities update immediately (real-time webhooks)
+   - Configure webhook URL in Mobile Message dashboard
 
 ## How It Works
 
-SmartSMS uses **Twilio API polling** instead of webhooks to retrieve messages:
+SmartSMS uses **Mobile Message webhook API** for real-time SMS processing:
 
-- **Polls every 60 seconds** for new inbound messages
-- **Tracks processed messages** to avoid duplicates
-- **Applies filters** and fires Home Assistant events
-- **Updates entities** with latest message data
-- **No webhook configuration** required
+- **Real-time webhooks** deliver messages instantly via Home Assistant Cloud
+- **JSON payload processing** with clean message extraction
+- **Applies filters** and fires Home Assistant events immediately
+- **Updates entities** with latest message data in real-time
+- **Webhook URL security** - no signature validation needed
+- **Two-way SMS** - receive and send messages through the same integration
 
-This approach bypasses the known issues with Twilio webhooks and Home Assistant Cloud content-type handling.
+This approach provides instant message delivery and reliable webhook processing through Nabu Casa infrastructure.
 
 ## Entities Created
 
@@ -240,24 +244,37 @@ During setup, you can configure:
 
 ## SMS Provider Setup
 
-### Mobile Message
-1. Create account at [mobilemessage.com.au](https://mobilemessage.com.au/)
-2. Get a dedicated SMS number (free with account)
-3. Configure webhook URL in account settings
-4. Use API Username and Password in SmartSMS
+### Mobile Message API Setup
+1. **Create Account**: Sign up at [Mobile Message](https://mobilemessage.com.au/)
+2. **Get Credentials**: Find API Username/Password in account settings
+3. **Get Phone Number**: Free dedicated number included with account
+4. **Add Credits**: Purchase SMS credits for sending messages
+5. **Configure Webhook**: Set webhook URL in Mobile Message dashboard
+
+### API Documentation
+- **Main API Docs**: [Mobile Message API Documentation](https://mobilemessage.com.au/api-documentation)
+- **Send SMS Endpoint**: `POST /v1/messages` - [Send SMS Documentation](https://mobilemessage.com.au/api-documentation#send-sms-messages)
+- **Webhook Format**: [Webhook Documentation](https://mobilemessage.com.au/api-documentation#webhooks)
+- **Account Management**: [Account API](https://mobilemessage.com.au/api-documentation#account-credit-balance)
 
 ### Finding Mobile Message Credentials
-- **API Username**: Found in account settings
-- **API Password**: Found in account settings
-- **Webhook Setup**: Configure your HA webhook URL in Mobile Message dashboard
+- **API Username**: Found in your Mobile Message account settings
+- **API Password**: Found in your Mobile Message account settings  
+- **Base URL**: `https://api.mobilemessage.com.au/`
+- **Authentication**: HTTP Basic Auth (username:password)
 
 ### Webhook Configuration
 The integration expects Mobile Message webhook payload format:
-- `message` - message content
-- `sender` - sender number  
-- `to` - receiving number
-- `message_id` - unique message ID
-- `received_at` - ISO timestamp
+- `message` - SMS message content
+- `sender` - sender phone number  
+- `to` - receiving phone number
+- `message_id` - unique message ID (UUID)
+- `received_at` - ISO timestamp when message was received
+
+### Sender ID Setup
+- **Phone Numbers**: Use your Mobile Message phone number as sender
+- **Business Names**: Register custom sender IDs in Mobile Message account
+- **Default Sender**: Configure in SmartSMS integration setup
 
 ## Troubleshooting
 
@@ -265,15 +282,17 @@ The integration expects Mobile Message webhook payload format:
 
 1. **Check Nabu Casa**: Ensure you have an active Home Assistant Cloud subscription
 2. **Find webhook URL**: Go to Settings → Home Assistant Cloud → Webhooks to find your SmartSMS webhook URL
-3. **Check SMS provider**: Make sure the webhook URL is configured correctly in your SMS provider
+3. **Check Mobile Message**: Make sure the webhook URL is configured correctly in your Mobile Message account
 4. **Check logs**: Look for SmartSMS errors in Home Assistant logs
-5. **Test webhook**: Send a test SMS to your number to verify the complete flow
+5. **Test webhook**: Send a test SMS to your Mobile Message number to verify the complete flow
 
 ### Common Issues
 
 - **"Integration not loading"**: Restart Home Assistant after installation
-- **"Webhook not found"**: Check that the URL matches exactly what's in your SMS provider settings
+- **"Webhook not found"**: Check that the URL matches exactly what's in your Mobile Message webhook settings
 - **"No messages appearing"**: Verify your message filters aren't blocking everything
+- **"Failed to send SMS"**: Check Mobile Message account has sufficient SMS credits
+- **"Invalid sender ID"**: Ensure sender ID is registered in your Mobile Message account
 
 ### Debug Logging
 ```yaml
