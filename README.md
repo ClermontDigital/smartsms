@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![HACS Badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
-[![Version](https://img.shields.io/badge/version-0.9.7-green.svg)](https://github.com/ClermontDigital/smartsms)
+[![Version](https://img.shields.io/badge/version-0.9.8-green.svg)](https://github.com/ClermontDigital/smartsms)
 
 Two-way SMS integration for Home Assistant using [Mobile Message API](https://mobilemessage.com.au/). Receive SMS via real-time webhooks and send SMS using the API.
 
@@ -28,10 +28,16 @@ Two-way SMS integration for Home Assistant using [Mobile Message API](https://mo
 4. Add integration via Settings → Devices & Services
 
 ### Configuration
-1. Get Mobile Message API Username/Password from account settings
-2. Add SmartSMS integration and enter credentials
-3. Copy webhook URL to Mobile Message dashboard
-4. Optional: Configure default sender ID and message filters
+1. **Get Mobile Message Credentials:**
+   - **API Username/Password**: Found in account settings
+   - **Sender ID**: Login to Mobile Message → **Settings → Sender IDs** → Use one of your approved numbers (e.g., `61480807776`)
+
+2. **Add SmartSMS Integration:**
+   - Enter API credentials and sender ID
+   - Copy webhook URL to Mobile Message dashboard
+
+3. **Test SMS Sending:**
+   - Use Developer Tools → Actions → `smartsms.send_sms`
 
 ## Usage
 

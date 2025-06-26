@@ -3,11 +3,12 @@
     "step": {
       "user": {
         "title": "SmartSMS Setup", 
-        "description": "Configure your Mobile Message account for SMS reception",
+        "description": "Configure your Mobile Message account for SMS reception and sending",
         "data": {
           "name": "Integration Name",
           "api_username": "Mobile Message API Username",
-          "api_password": "Mobile Message API Password"
+          "api_password": "Mobile Message API Password",
+          "default_sender": "Sender ID (from Mobile Message Settings → Sender IDs)"
         }
       },
       "filters": {

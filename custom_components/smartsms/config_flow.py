@@ -65,7 +65,11 @@ class SmartSMSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self.data[CONF_WEBHOOK_ID] = self._generate_webhook_id()
                 self.data[CONF_WEBHOOK_SECRET] = self._generate_webhook_secret()
                 
-                return await self.async_step_filters()
+                # Create the config entry directly since sender ID is now required upfront
+                return self.async_create_entry(
+                    title=self.data[CONF_NAME],
+                    data=self.data,
+                )
                 
             except InvalidCredentials:
                 errors["base"] = "invalid_auth"
@@ -79,6 +83,7 @@ class SmartSMSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_NAME, default="SmartSMS"): str,
                 vol.Required(CONF_API_USERNAME): str,
                 vol.Required(CONF_API_PASSWORD): str,
+                vol.Required(CONF_DEFAULT_SENDER): str,
             }),
             errors=errors,
         )
@@ -157,8 +162,8 @@ class SmartSMSOptionsFlow(config_entries.OptionsFlow):
         base_url = self.hass.config.external_url or "http://your-home-assistant.local:8123"
         webhook_url = f"{base_url}/api/webhook/{webhook_id}"
 
-        # Get current default sender
-        current_default_sender = self._config_entry.data.get(CONF_DEFAULT_SENDER, "")
+        # Get current default sender (check both data and options for backward compatibility)
+        current_default_sender = self._config_entry.data.get(CONF_DEFAULT_SENDER, "") or self._config_entry.options.get(CONF_DEFAULT_SENDER, "")
 
         return self.async_show_form(
             step_id="init",
