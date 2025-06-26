@@ -8,6 +8,6 @@
   "integration_type": "service",
   "iot_class": "cloud_push",
   "issue_tracker": "https://github.com/ClermontDigital/smartsms/issues",
-  "requirements": ["twilio>=8.0.0"],
-  "version": "0.8.4"
+  "requirements": [],
+  "version": "0.9.0"
 } 

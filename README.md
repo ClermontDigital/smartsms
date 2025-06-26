@@ -2,9 +2,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![HACS Badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
-[![Version](https://img.shields.io/badge/version-0.8.4-green.svg)](https://github.com/ClermontDigital/smartsms)
+[![Version](https://img.shields.io/badge/version-0.9.0-green.svg)](https://github.com/ClermontDigital/smartsms)
 
-A Home Assistant integration that receives SMS messages via Twilio API polling and exposes them as entities for automation. Designed to work reliably with Home Assistant Cloud (Nabu Casa) by bypassing webhook limitations.
+A Home Assistant integration that receives SMS messages via Mobile Message webhook API and exposes them as entities for automation. Designed to work with Home Assistant Cloud (Nabu Casa) webhooks for reliable real-time SMS processing.
 
 ## What It Does
 
@@ -181,23 +181,24 @@ During setup, you can configure:
 
 ## SMS Provider Setup
 
-### Twilio
-1. Create account at console.twilio.com
-2. Buy a phone number
-3. Configure webhook URL in phone number settings
-4. Use Account SID and Auth Token in SmartSMS
+### Mobile Message
+1. Create account at [mobilemessage.com.au](https://mobilemessage.com.au/)
+2. Get a dedicated SMS number (free with account)
+3. Configure webhook URL in account settings
+4. Use API Username and Password in SmartSMS
 
-### Finding Twilio Credentials
-- **Account SID**: Main dashboard "Account Info" box, starts with `AC...` (34 characters)
-- **Auth Token**: Click "eye" icon to reveal (32 characters)  
-- **Alternative**: Console → Account → API keys & tokens
+### Finding Mobile Message Credentials
+- **API Username**: Found in account settings
+- **API Password**: Found in account settings
+- **Webhook Setup**: Configure your HA webhook URL in Mobile Message dashboard
 
-### Other Providers
-Any SMS provider that can send POST requests to webhooks should work. The integration expects these fields in the webhook payload:
-- `Body` - message content
-- `From` - sender number
-- `To` - receiving number
-- `MessageSid` - unique message ID (optional)
+### Webhook Configuration
+The integration expects Mobile Message webhook payload format:
+- `message` - message content
+- `sender` - sender number  
+- `to` - receiving number
+- `message_id` - unique message ID
+- `received_at` - ISO timestamp
 
 ## Troubleshooting
 

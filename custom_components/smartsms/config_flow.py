@@ -13,8 +13,8 @@ from homeassistant.core import HomeAssistant, callback  # type: ignore
 from homeassistant.data_entry_flow import FlowResult  # type: ignore
 
 from .const import (
-    CONF_ACCOUNT_SID,
-    CONF_AUTH_TOKEN,
+    CONF_API_PASSWORD,
+    CONF_API_USERNAME,
     CONF_KEYWORDS,
     CONF_SENDER_BLACKLIST,
     CONF_SENDER_WHITELIST,
@@ -53,11 +53,11 @@ class SmartSMSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            # Validate the Twilio credentials
+            # Validate the Mobile Message credentials
             try:
                 await self._validate_credentials(
-                    user_input[CONF_ACCOUNT_SID], 
-                    user_input[CONF_AUTH_TOKEN]
+                    user_input[CONF_API_USERNAME], 
+                    user_input[CONF_API_PASSWORD]
                 )
                 
                 # Store basic config
@@ -79,8 +79,8 @@ class SmartSMSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema({
                 vol.Required(CONF_NAME, default="SmartSMS"): str,
-                vol.Required(CONF_ACCOUNT_SID): str,
-                vol.Required(CONF_AUTH_TOKEN): str,
+                vol.Required(CONF_API_USERNAME): str,
+                vol.Required(CONF_API_PASSWORD): str,
             }),
             errors=errors,
         )
@@ -141,20 +141,34 @@ class SmartSMSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             },
         )
 
-    async def _validate_credentials(self, account_sid: str, auth_token: str) -> None:
-        """Validate Twilio credentials."""
+    async def _validate_credentials(self, username: str, password: str) -> None:
+        """Validate Mobile Message credentials."""
         try:
-            from twilio.rest import Client
+            import aiohttp
+            from requests.auth import HTTPBasicAuth
             
-            client = Client(account_sid, auth_token)
+            # Test Mobile Message API with basic auth
+            async with aiohttp.ClientSession() as session:
+                auth = aiohttp.BasicAuth(username, password)
+                async with session.get(
+                    "https://api.mobilemessage.com.au/v1/balance",
+                    auth=auth,
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as response:
+                    if response.status == 401:
+                        raise InvalidCredentials("Invalid Mobile Message credentials")
+                    elif response.status != 200:
+                        raise InvalidCredentials(f"Mobile Message API error: {response.status}")
+                    
+                    # If we get here, credentials are valid
+                    data = await response.json()
+                    _LOGGER.debug("Mobile Message validation successful: %s", data)
             
-            # Try to fetch account info to validate credentials
-            await self.hass.async_add_executor_job(
-                lambda: client.api.accounts(account_sid).fetch()
-            )
-            
+        except aiohttp.ClientError as err:
+            _LOGGER.error("Failed to connect to Mobile Message API: %s", err)
+            raise InvalidCredentials from err
         except Exception as err:
-            _LOGGER.error("Failed to validate Twilio credentials: %s", err)
+            _LOGGER.error("Failed to validate Mobile Message credentials: %s", err)
             raise InvalidCredentials from err
 
     def _generate_webhook_id(self) -> str:

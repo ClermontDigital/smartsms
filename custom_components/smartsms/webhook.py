@@ -24,7 +24,7 @@ from .const import (
     ATTR_SENDER,
     ATTR_TIMESTAMP,
     ATTR_TO_NUMBER,
-    CONF_AUTH_TOKEN,
+    CONF_API_PASSWORD,
     CONF_KEYWORDS,
     CONF_SENDER_BLACKLIST,
     CONF_SENDER_WHITELIST,
@@ -32,12 +32,11 @@ from .const import (
     DOMAIN,
     EVENT_KEYWORD_MATCHED,
     EVENT_MESSAGE_RECEIVED,
-    TWILIO_ACCOUNT_SID,
-    TWILIO_BODY,
-    TWILIO_FROM,
-    TWILIO_MESSAGE_SID,
-    TWILIO_TIMESTAMP,
-    TWILIO_TO,
+    MM_MESSAGE,
+    MM_MESSAGE_ID,
+    MM_RECEIVED_AT,
+    MM_SENDER,
+    MM_TO,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -101,15 +100,13 @@ async def handle_webhook(
         content_length = request.headers.get('content-length')
         if content_length and int(content_length) > 10000:
             _LOGGER.warning("Webhook payload too large: %s bytes", content_length)
-            twiml_error = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>'
-            return web.Response(status=413, text=twiml_error, content_type="application/xml")
+            return web.Response(status=413, text="PAYLOAD_TOO_LARGE", content_type="text/plain")
         
         # Find config entry
         entry_id = _WEBHOOK_TO_ENTRY.get(webhook_id)
         if not entry_id:
             _LOGGER.error("No config entry found for webhook ID: %s", webhook_id)
-            twiml_error = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>'
-            return web.Response(status=404, text=twiml_error, content_type="application/xml")
+            return web.Response(status=404, text="WEBHOOK_NOT_FOUND", content_type="text/plain")
         
         # Get config entry
         config_entry = None
@@ -120,35 +117,27 @@ async def handle_webhook(
         
         if not config_entry:
             _LOGGER.error("Config entry %s not found", entry_id)
-            twiml_error = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>'
-            return web.Response(status=404, text=twiml_error, content_type="application/xml")
+            return web.Response(status=404, text="CONFIG_NOT_FOUND", content_type="text/plain")
         
         # Parse request data
         data = await _parse_request_data(request)
         if not data:
             _LOGGER.error("Failed to parse webhook request data")
-            twiml_error = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>'
-            return web.Response(status=400, text=twiml_error, content_type="application/xml")
+            return web.Response(status=400, text="INVALID_DATA", content_type="text/plain")
         
-        # Validate Twilio signature if enabled
-        auth_token = config_entry.data.get(CONF_AUTH_TOKEN)
-        if auth_token and not await _validate_twilio_signature(request, data, auth_token):
-            _LOGGER.warning("Invalid Twilio signature for webhook %s", webhook_id)
-            twiml_error = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>'
-            return web.Response(status=403, text=twiml_error, content_type="application/xml")
+        # Note: Mobile Message uses webhook URLs for security rather than signature validation
+        # The webhook URL itself acts as the authentication mechanism
         
         # Extract message data
         message_data = _extract_message_data(data)
         if not message_data:
             _LOGGER.error("Failed to extract valid message data")
-            twiml_error = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>'
-            return web.Response(status=400, text=twiml_error, content_type="application/xml")
+            return web.Response(status=400, text="INVALID_MESSAGE", content_type="text/plain")
         
         # Apply filters
         if not _should_process_message(config_entry.data, message_data):
             _LOGGER.debug("Message filtered out from %s", message_data[ATTR_SENDER])
-            twiml = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>'
-            return web.Response(status=200, text=twiml, content_type="application/xml")
+            return web.Response(status=200, text="FILTERED", content_type="text/plain")
         
         # Check for keyword matches
         matched_keywords = _check_keywords(
@@ -172,18 +161,16 @@ async def handle_webhook(
             message_data[ATTR_BODY][:50] + "..." if len(message_data[ATTR_BODY]) > 50 else message_data[ATTR_BODY]
         )
         
-        # Return TwiML response that Twilio expects
-        twiml = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>'
-        return web.Response(status=200, text=twiml, content_type="application/xml")
+        # Return simple OK response that Mobile Message expects
+        return web.Response(status=200, text="OK", content_type="text/plain")
         
     except Exception as err:
         _LOGGER.exception("Error processing webhook %s: %s", webhook_id, err)
-        twiml_error = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>'
-        return web.Response(status=500, text=twiml_error, content_type="application/xml")
+        return web.Response(status=500, text="ERROR", content_type="text/plain")
 
 
 async def _parse_request_data(request: web.Request) -> dict[str, Any] | None:
-    """Parse request data from various formats."""
+    """Parse request data from Mobile Message webhook (JSON format)."""
     try:
         # Read body only once
         body = await request.read()
@@ -199,101 +186,71 @@ async def _parse_request_data(request: web.Request) -> dict[str, Any] | None:
                 body_str = body.decode('utf-8', errors='replace')
                 _LOGGER.warning("Using UTF-8 with error replacement for webhook data")
         
-        # Try form data first (most common for Twilio)
-        if request.content_type == 'application/x-www-form-urlencoded':
-            # parse_qs automatically handles URL decoding
-            return dict(parse_qs(body_str, keep_blank_values=True))
-        
-        # Try JSON
-        if 'json' in request.content_type:
+        # Mobile Message sends JSON data
+        if 'json' in request.content_type or request.content_type == 'application/json':
             import json
             return json.loads(body_str)
         
-        # Manual parse for form data (fallback)
-        return dict(parse_qs(body_str, keep_blank_values=True))
+        # Fallback: try to parse as JSON anyway (some providers don't set content-type correctly)
+        try:
+            import json
+            return json.loads(body_str)
+        except json.JSONDecodeError:
+            _LOGGER.error("Failed to parse webhook data as JSON: %s", body_str[:200])
+            return None
         
     except Exception as err:
         _LOGGER.error("Error parsing request data: %s", err)
         return None
 
 
-async def _validate_twilio_signature(
-    request: web.Request, data: dict[str, Any], auth_token: str
-) -> bool:
-    """Validate Twilio webhook signature."""
-    try:
-        signature = request.headers.get("X-Twilio-Signature")
-        if not signature:
-            return False
-        
-        # Get URL and sorted data for signature
-        url = str(request.url)
-        sorted_data = sorted(data.items())
-        body = "&".join([f"{k}={v[0] if isinstance(v, list) else v}" for k, v in sorted_data])
-        
-        # Calculate expected signature
-        expected_signature = base64.b64encode(
-            hmac.new(
-                auth_token.encode("utf-8"),
-                f"{url}{body}".encode("utf-8"),
-                hashlib.sha1
-            ).digest()
-        ).decode()
-        
-        return hmac.compare_digest(signature, expected_signature)
-        
-    except Exception as err:
-        _LOGGER.error("Error validating Twilio signature: %s", err)
-        return False
+# Mobile Message doesn't use signature validation - webhook URL security is sufficient
 
 
 def _extract_message_data(data: dict[str, Any]) -> dict[str, Any] | None:
-    """Extract SMS message data from webhook payload."""
+    """Extract SMS message data from Mobile Message webhook payload."""
     try:
-        # Handle list values from form parsing
-        def get_value(key: str) -> str:
-            value = data.get(key, "")
-            if isinstance(value, list):
-                return value[0] if value else ""
-            return str(value)
-        
-        # Extract Twilio fields
-        body = get_value(TWILIO_BODY)
-        sender = get_value(TWILIO_FROM)
-        to_number = get_value(TWILIO_TO)
+        # Extract Mobile Message fields (direct JSON access, no form parsing needed)
+        body = data.get(MM_MESSAGE, "")
+        sender = data.get(MM_SENDER, "")
+        to_number = data.get(MM_TO, "")
+        message_id = data.get(MM_MESSAGE_ID, "")
+        received_at_str = data.get(MM_RECEIVED_AT, "")
         
         # Debug log the raw extracted values
-        _LOGGER.debug("RAW EXTRACTED - Body: %r, From: %r, To: %r", body, sender, to_number)
+        _LOGGER.debug("RAW EXTRACTED - Message: %r, Sender: %r, To: %r", body, sender, to_number)
         
         if not body or not sender:
-            _LOGGER.error("Missing required fields: Body=%s, From=%s", body, sender)
+            _LOGGER.error("Missing required fields: Message=%s, Sender=%s", body, sender)
             return None
         
-        # Parse timestamp
-        timestamp_str = get_value(TWILIO_TIMESTAMP)
-        if timestamp_str:
+        # Parse timestamp (Mobile Message uses ISO format)
+        if received_at_str:
             try:
-                # Try parsing Twilio timestamp format
-                timestamp = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=dt_util.UTC)
-            except ValueError:
+                # Parse ISO timestamp format: "2024-01-15T10:30:45Z"
+                timestamp = datetime.fromisoformat(received_at_str.replace('Z', '+00:00'))
+                if timestamp.tzinfo is None:
+                    timestamp = timestamp.replace(tzinfo=dt_util.UTC)
+            except ValueError as e:
+                _LOGGER.warning("Failed to parse timestamp '%s': %s", received_at_str, e)
                 timestamp = dt_util.utcnow()
         else:
             timestamp = dt_util.utcnow()
         
-        # Validate phone numbers
+        # Validate phone numbers (Mobile Message uses international format)
         if not _is_valid_phone(sender) or not _is_valid_phone(to_number):
-            _LOGGER.warning("Invalid phone number format: From=%s, To=%s", sender, to_number)
+            _LOGGER.warning("Invalid phone number format: Sender=%s, To=%s", sender, to_number)
         
-        # Clean up the message body to remove CR/LF and other problematic characters
+        # Clean up the message body to remove problematic characters
         clean_body = _clean_message_body(body)
         
         return {
             ATTR_BODY: clean_body[:1000],  # Limit message length
             ATTR_SENDER: sender,
             ATTR_TO_NUMBER: to_number,
-            ATTR_MESSAGE_SID: get_value(TWILIO_MESSAGE_SID),
+            ATTR_MESSAGE_SID: message_id,
             ATTR_TIMESTAMP: timestamp.isoformat(),
-            ATTR_PROVIDER: "twilio",
+            ATTR_PROVIDER: "mobilemessage",
         }
         
     except Exception as err:
@@ -302,11 +259,25 @@ def _extract_message_data(data: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def _is_valid_phone(phone: str) -> bool:
-    """Validate phone number format."""
+    """Validate phone number format (Australian and international)."""
     if not phone:
         return False
-    # Basic phone validation - starts with + and contains only digits
-    return bool(re.match(r'^\+[1-9]\d{1,14}$', phone))
+    
+    # Mobile Message supports both Australian local and international formats
+    # Australian international: +61412345678
+    # Australian local: 0412345678  
+    # Other international: +1234567890
+    
+    # Check for international format (+country code + number)
+    if phone.startswith('+'):
+        return bool(re.match(r'^\+[1-9]\d{7,15}$', phone))
+    
+    # Check for Australian local format (0xxxxxxxxx)
+    if phone.startswith('0'):
+        return bool(re.match(r'^0[2-9]\d{8}$', phone))
+    
+    # Allow basic numeric format for flexibility
+    return bool(re.match(r'^[1-9]\d{7,15}$', phone))
 
 
 def _should_process_message(config: dict[str, Any], message_data: dict[str, Any]) -> bool:

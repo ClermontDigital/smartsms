@@ -5,9 +5,9 @@ from typing import Final
 
 DOMAIN: Final = "smartsms"
 
-# Configuration keys
-CONF_ACCOUNT_SID: Final = "account_sid"
-CONF_AUTH_TOKEN: Final = "auth_token"
+# Configuration keys  
+CONF_API_USERNAME: Final = "api_username"
+CONF_API_PASSWORD: Final = "api_password"
 CONF_WEBHOOK_ID: Final = "webhook_id"
 CONF_WEBHOOK_SECRET: Final = "webhook_secret"
 CONF_SENDER_WHITELIST: Final = "sender_whitelist"
@@ -29,13 +29,12 @@ DEFAULT_WEBHOOK_SECRET_LENGTH: Final = 32
 DEFAULT_MESSAGE_RETENTION_DAYS: Final = 180  # 6 months
 BINARY_SENSOR_RESET_DELAY: Final = 5  # seconds
 
-# Twilio webhook payload keys
-TWILIO_BODY: Final = "Body"
-TWILIO_FROM: Final = "From"
-TWILIO_TO: Final = "To"
-TWILIO_MESSAGE_SID: Final = "MessageSid"
-TWILIO_ACCOUNT_SID: Final = "AccountSid"
-TWILIO_TIMESTAMP: Final = "DateSent"
+# Mobile Message webhook payload keys
+MM_MESSAGE: Final = "message"
+MM_SENDER: Final = "sender"
+MM_TO: Final = "to"
+MM_MESSAGE_ID: Final = "message_id"
+MM_RECEIVED_AT: Final = "received_at"
 
 # Attributes
 ATTR_SENDER: Final = "sender"
