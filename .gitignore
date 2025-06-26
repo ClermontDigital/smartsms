@@ -115,6 +115,7 @@ dmypy.json
 # IDEs
 .vscode/
 .idea/
+.cursor/
 *.swp
 *.swo
 *~
@@ -133,6 +134,8 @@ prd.md
 logs/
 temp.md
 test_webhook.sh
+*_automation.yaml
+sms_to_signal*.yaml
 
 # Testing
 .tox/
