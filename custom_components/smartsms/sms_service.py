@@ -42,15 +42,18 @@ async def async_register_services(hass: HomeAssistant, entry: ConfigEntry) -> No
             to_number = call.data["to"]
             message = call.data["message"]
             sender_from_call = call.data.get("sender")
-            sender_from_config = entry.data.get(CONF_DEFAULT_SENDER, "")
+            # Check both entry.data and entry.options for default sender
+            sender_from_config = entry.data.get(CONF_DEFAULT_SENDER, "") or entry.options.get(CONF_DEFAULT_SENDER, "")
             sender = sender_from_call or sender_from_config
             custom_ref = call.data.get("custom_ref", "")
             
             # Debug logging
             _LOGGER.debug("Service call data: %s", call.data)
             _LOGGER.debug("Entry data keys: %s", list(entry.data.keys()))
+            _LOGGER.debug("Entry options keys: %s", list(entry.options.keys()) if entry.options else "No options")
             _LOGGER.debug("Sender from call: %r", sender_from_call)
-            _LOGGER.debug("Sender from config: %r", sender_from_config)
+            _LOGGER.debug("Sender from config data: %r", entry.data.get(CONF_DEFAULT_SENDER, ""))
+            _LOGGER.debug("Sender from config options: %r", entry.options.get(CONF_DEFAULT_SENDER, "") if entry.options else "")
             _LOGGER.debug("Final sender: %r", sender)
             
             if not sender:

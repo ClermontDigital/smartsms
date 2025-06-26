@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![HACS Badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
-[![Version](https://img.shields.io/badge/version-0.9.5-green.svg)](https://github.com/ClermontDigital/smartsms)
+[![Version](https://img.shields.io/badge/version-0.9.6-green.svg)](https://github.com/ClermontDigital/smartsms)
 
 Two-way SMS integration for Home Assistant using [Mobile Message API](https://mobilemessage.com.au/). Receive SMS via real-time webhooks and send SMS using the API.
 

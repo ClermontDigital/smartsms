@@ -11,13 +11,10 @@
         }
       },
       "filters": {
-        "title": "Message Filters",
-        "description": "Configure optional message filtering. Your webhook URL is: **{webhook_url}** - copy this to your Mobile Message webhook settings.",
+        "title": "SMS Configuration",
+        "description": "Configure SMS sending options. Your webhook URL is: **{webhook_url}** - copy this to your Mobile Message webhook settings.",
         "data": {
-          "default_sender": "Default Sender ID (for sending SMS)",
-          "sender_whitelist": "Sender Whitelist (comma-separated phone numbers)",
-          "sender_blacklist": "Sender Blacklist (comma-separated phone numbers)",
-          "keywords": "Keywords to watch (comma-separated, use 'regex:pattern' for regex)"
+          "default_sender": "Default Sender ID (for sending SMS)"
         }
       }
     },
@@ -33,12 +30,9 @@
     "step": {
       "init": {
         "title": "SmartSMS Configuration", 
-        "description": "**Webhook URL:** {webhook_url}\n\nCopy this URL to your Mobile Message webhook configuration. You can also update your message filters below.",
+        "description": "**Webhook URL:** {webhook_url}\n\nCopy this URL to your Mobile Message webhook configuration. You can also update your SMS sending options below.",
         "data": {
-          "default_sender": "Default Sender ID (for sending SMS)",
-          "sender_whitelist": "Sender Whitelist (comma-separated phone numbers)",
-          "sender_blacklist": "Sender Blacklist (comma-separated phone numbers)",
-          "keywords": "Keywords to watch (comma-separated, use 'regex:pattern' for regex)"
+          "default_sender": "Default Sender ID (for sending SMS)"
         }
       }
     }

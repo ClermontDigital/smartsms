@@ -16,9 +16,6 @@ from .const import (
     CONF_API_PASSWORD,
     CONF_API_USERNAME,
     CONF_DEFAULT_SENDER,
-    CONF_KEYWORDS,
-    CONF_SENDER_BLACKLIST,
-    CONF_SENDER_WHITELIST,
     CONF_WEBHOOK_ID,
     CONF_WEBHOOK_SECRET,
     DEFAULT_WEBHOOK_SECRET_LENGTH,
@@ -91,38 +88,7 @@ class SmartSMSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Configure message filters."""
         if user_input is not None:
-            # Process filter lists
-            sender_whitelist = []
-            if user_input.get(CONF_SENDER_WHITELIST):
-                sender_whitelist = [
-                    phone.strip() 
-                    for phone in user_input[CONF_SENDER_WHITELIST].split(",")
-                    if phone.strip()
-                ]
-            
-            sender_blacklist = []
-            if user_input.get(CONF_SENDER_BLACKLIST):
-                sender_blacklist = [
-                    phone.strip() 
-                    for phone in user_input[CONF_SENDER_BLACKLIST].split(",")
-                    if phone.strip()
-                ]
-            
-            keywords = []
-            if user_input.get(CONF_KEYWORDS):
-                keywords = [
-                    keyword.strip() 
-                    for keyword in user_input[CONF_KEYWORDS].split(",")
-                    if keyword.strip()
-                ]
-            
-            # Add filters to config
-            if sender_whitelist:
-                self.data[CONF_SENDER_WHITELIST] = sender_whitelist
-            if sender_blacklist:
-                self.data[CONF_SENDER_BLACKLIST] = sender_blacklist
-            if keywords:
-                self.data[CONF_KEYWORDS] = keywords
+            # Add default sender to config
             if user_input.get(CONF_DEFAULT_SENDER):
                 self.data[CONF_DEFAULT_SENDER] = user_input[CONF_DEFAULT_SENDER].strip()
             
@@ -136,9 +102,6 @@ class SmartSMSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="filters",
             data_schema=vol.Schema({
                 vol.Optional(CONF_DEFAULT_SENDER): str,
-                vol.Optional(CONF_SENDER_WHITELIST): str,
-                vol.Optional(CONF_SENDER_BLACKLIST): str,
-                vol.Optional(CONF_KEYWORDS): str,
             }),
             description_placeholders={
                 "webhook_url": self._get_webhook_url(),
@@ -194,19 +157,13 @@ class SmartSMSOptionsFlow(config_entries.OptionsFlow):
         base_url = self.hass.config.external_url or "http://your-home-assistant.local:8123"
         webhook_url = f"{base_url}/api/webhook/{webhook_id}"
 
-        # Get current filters
+        # Get current default sender
         current_default_sender = self._config_entry.data.get(CONF_DEFAULT_SENDER, "")
-        current_whitelist = ", ".join(self._config_entry.data.get(CONF_SENDER_WHITELIST, []))
-        current_blacklist = ", ".join(self._config_entry.data.get(CONF_SENDER_BLACKLIST, []))
-        current_keywords = ", ".join(self._config_entry.data.get(CONF_KEYWORDS, []))
 
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
                 vol.Optional(CONF_DEFAULT_SENDER, default=current_default_sender): str,
-                vol.Optional(CONF_SENDER_WHITELIST, default=current_whitelist): str,
-                vol.Optional(CONF_SENDER_BLACKLIST, default=current_blacklist): str,
-                vol.Optional(CONF_KEYWORDS, default=current_keywords): str,
             }),
             description_placeholders={
                 "webhook_url": webhook_url,

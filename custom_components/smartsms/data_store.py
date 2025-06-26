@@ -29,7 +29,7 @@ class SmartSMSDataStore:
         try:
             # DEBUG: Log what's being stored
             body = message_data.get("body", "")
-            _LOGGER.error("DATA STORE - Storing message body: %r (len=%d)", body, len(body))
+            _LOGGER.debug("DATA STORE - Storing message body: %r (len=%d)", body, len(body))
             
             # Get or create entry data
             entry_data = self._get_entry_data()
