@@ -41,11 +41,20 @@ async def async_register_services(hass: HomeAssistant, entry: ConfigEntry) -> No
         try:
             to_number = call.data["to"]
             message = call.data["message"]
-            sender = call.data.get("sender") or entry.data.get(CONF_DEFAULT_SENDER, "")
+            sender_from_call = call.data.get("sender")
+            sender_from_config = entry.data.get(CONF_DEFAULT_SENDER, "")
+            sender = sender_from_call or sender_from_config
             custom_ref = call.data.get("custom_ref", "")
             
+            # Debug logging
+            _LOGGER.debug("Service call data: %s", call.data)
+            _LOGGER.debug("Entry data keys: %s", list(entry.data.keys()))
+            _LOGGER.debug("Sender from call: %r", sender_from_call)
+            _LOGGER.debug("Sender from config: %r", sender_from_config)
+            _LOGGER.debug("Final sender: %r", sender)
+            
             if not sender:
-                _LOGGER.error("No sender ID provided and no default sender configured")
+                _LOGGER.error("No sender ID provided and no default sender configured. Call data: %s, Config keys: %s", call.data, list(entry.data.keys()))
                 return
             
             # Validate phone number format
