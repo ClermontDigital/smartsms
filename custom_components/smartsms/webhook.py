@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import logging
 import re
+import unicodedata
 from datetime import datetime
 from typing import Any
 from urllib.parse import parse_qs
@@ -92,7 +93,7 @@ async def async_unregister_webhook(hass: HomeAssistant, entry: ConfigEntry) -> N
 async def handle_webhook(
     hass: HomeAssistant, webhook_id: str, request: web.Request
 ) -> web.Response:
-    """Handle incoming SMS webhook from Twilio."""
+    """Handle incoming SMS webhook from Mobile Message."""
     _LOGGER.debug("SmartSMS webhook called: %s", webhook_id)
     
     try:
@@ -243,9 +244,6 @@ async def _parse_request_data(request: web.Request) -> dict[str, Any] | None:
         return None
 
 
-# Mobile Message doesn't use signature validation - webhook URL security is sufficient
-
-
 def _extract_message_data(data: dict[str, Any]) -> dict[str, Any] | None:
     """Extract SMS message data from Mobile Message webhook payload."""
     try:
@@ -338,12 +336,9 @@ def _should_process_message(config: dict[str, Any], message_data: dict[str, Any]
 
 
 def _clean_message_body(body: str) -> str:
-    """Clean SMS message body by keeping ONLY printable ASCII characters."""
+    """Clean SMS message body with basic filtering."""
     if not body:
         return body
-    
-    import re
-    import html
     
     _LOGGER.debug("ORIGINAL SMS BODY: %r (len=%d)", body, len(body))
     
@@ -358,33 +353,24 @@ def _clean_message_body(body: str) -> str:
     
     # Step 2: HTML entity decoding
     try:
+        import html
         body = html.unescape(body)
         _LOGGER.debug("HTML unescaped: %r", body)
     except Exception:
         pass
     
-    # Step 3: AGGRESSIVE ASCII-ONLY FILTERING + MARKDOWN REMOVAL
-    # Keep only printable ASCII characters (32-126) but exclude markdown chars
-    # This removes ALL Unicode, control chars, invisible characters AND markdown
-    ascii_chars = []
-    for char in body:
-        char_code = ord(char)
-        if 32 <= char_code <= 126:  # Printable ASCII range
-            # But specifically remove asterisks and other markdown characters
-            if char not in ['*', '_', '`', '#', '[', ']', '!', '|', '\\', '^', '>', '<', '~']:
-                ascii_chars.append(char)
-            else:
-                _LOGGER.debug("WEBHOOK REMOVED markdown char: %r (code=%d)", char, char_code)
-        elif char_code == 9:  # Tab -> space
-            ascii_chars.append(' ')
-        elif char_code in (10, 13):  # LF, CR -> space
-            ascii_chars.append(' ')
-        else:
-            # Log what we're removing for debugging
-            _LOGGER.debug("WEBHOOK REMOVED non-ASCII char: %r (code=%d)", char, char_code)
+    # Step 3: Simple cleanup - just remove problematic markdown characters
+    # Keep everything else including emojis
+    clean_body = body
     
-    clean_body = ''.join(ascii_chars)
-    _LOGGER.debug("ASCII-only result: %r", clean_body)
+    # Remove specific characters that cause markdown formatting issues
+    for char in ['*', '_', '`']:
+        if char in clean_body:
+            clean_body = clean_body.replace(char, '')
+            _LOGGER.debug("REMOVED char: %r", char)
+    
+    # Convert line breaks to spaces
+    clean_body = re.sub(r'[\r\n]+', ' ', clean_body)
     
     # Step 4: Normalize whitespace
     clean_body = re.sub(r'\s+', ' ', clean_body)
