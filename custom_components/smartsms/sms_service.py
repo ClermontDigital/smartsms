@@ -144,6 +144,7 @@ async def _send_sms_api(
         if custom_ref:
             payload["messages"][0]["custom_ref"] = custom_ref
         
+        _LOGGER.info("Sending SMS to %s using sender '%s'", to_number, sender)
         _LOGGER.debug("Sending SMS API request to %s", url)
         _LOGGER.debug("Payload: %s", payload)
         
@@ -172,8 +173,9 @@ async def _send_sms_api(
                                 )
                                 return True
                             else:
-                                error = results[0].get("status", "Unknown error") if results else "No results"
-                                _LOGGER.error("SMS API returned error: %s", error)
+                                error_detail = results[0] if results else "No results"
+                                _LOGGER.error("SMS API returned error: %s", error_detail)
+                                _LOGGER.error("Full API response: %s", response_data)
                                 return False
                         else:
                             _LOGGER.error("SMS API status not complete: %s", response_data.get("status"))
@@ -183,6 +185,8 @@ async def _send_sms_api(
                         return False
                 else:
                     _LOGGER.error("SMS API returned status %d: %s", response.status, response_text)
+                    _LOGGER.error("Request payload was: %s", payload)
+                    _LOGGER.error("Request headers were: %s", {k: v for k, v in headers.items() if k.lower() != 'authorization'})
                     return False
                     
     except asyncio.TimeoutError:
