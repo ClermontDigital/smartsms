@@ -50,6 +50,45 @@ data:
   sender: "MyCompany"  # Optional
 ```
 
+### Sending SMS Examples
+
+**Developer Tools - Services:**
+1. Go to Developer Tools → Services
+2. Choose `smartsms.send_sms`
+3. Fill in the form:
+   - **To**: `+61412345678`
+   - **Message**: `Test message from Home Assistant`
+   - **Sender**: `MyHome` (optional)
+
+**In Automations:**
+```yaml
+# Simple notification
+- service: smartsms.send_sms
+  data:
+    to: "+61412345678"
+    message: "Door unlocked at {{ now().strftime('%H:%M') }}"
+
+# With dynamic content
+- service: smartsms.send_sms
+  data:
+    to: "{{ states('input_text.emergency_contact') }}"
+    message: >
+      Alert: {{ trigger.to_state.attributes.friendly_name }} 
+      changed to {{ trigger.to_state.state }}
+    custom_ref: "alert_{{ now().timestamp() }}"
+
+# Multiple recipients (use repeat action)
+- repeat:
+    for_each:
+      - "+61412345678"
+      - "+61498765432"
+    sequence:
+      - service: smartsms.send_sms
+        data:
+          to: "{{ repeat.item }}"
+          message: "Family alert: Everyone home safe!"
+```
+
 ### Basic Automation Examples
 
 **Notify on new SMS:**
