@@ -380,3 +380,15 @@ async def test_options_url_is_the_cloudhook_with_ha_cloud(hass, loaded):
         result = await hass.config_entries.options.async_init(loaded.entry_id)
     assert result["description_placeholders"]["webhook_url"] == "https://hooks.nabu.casa/abc"
     fake.async_get_or_create_cloudhook.assert_awaited_once_with(hass, WEBHOOK_ID)
+
+
+async def test_diagnostics_options_only_sender_is_not_a_difference(hass):
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from custom_components.smartsms.diagnostics import async_get_config_entry_diagnostics
+    entry = MockConfigEntry(domain=DOMAIN, title="SmartSMS",
+                            data={"name": "SmartSMS", "api_username": "u", "api_password": "p", "webhook_id": "w"},
+                            options={CONF_DEFAULT_SENDER: "61400000000"})
+    entry.add_to_hass(hass)
+    diag = await async_get_config_entry_diagnostics(hass, entry)
+    assert diag["sender_in_use_from"] == "options"
+    assert diag["options_sender_differs_from_setup"] is False

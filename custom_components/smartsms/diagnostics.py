@@ -49,7 +49,9 @@ async def async_get_config_entry_diagnostics(
         "data": async_redact_data(dict(entry.data), TO_REDACT),
         "options": async_redact_data(dict(entry.options), TO_REDACT),
         "sender_in_use_from": "options" if options_sender else "setup",
-        "options_sender_differs_from_setup": bool(options_sender) and options_sender != setup_sender,
+        # Early 0.9.x entries keep the sender in options only; that's not a difference
+        "options_sender_differs_from_setup": bool(options_sender and setup_sender)
+        and options_sender != setup_sender,
         "keyword_count": len(entry.options.get(CONF_KEYWORDS) or []),
         "message_count": store.message_count if store else None,
         "latest_message": async_redact_data(store.latest_message, TO_REDACT) if store else None,
