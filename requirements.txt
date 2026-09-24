@@ -1,2 +1,0 @@
-twilio>=8.0.0
-homeassistant>=2024.1.0 
