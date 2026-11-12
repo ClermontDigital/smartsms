@@ -55,6 +55,10 @@ class SmartSMSMessagesCard extends HTMLElement {
     this._config = config || {};
   }
 
+  // Set by Home Assistant's panel view, sometimes after the first render
+  set isPanel(value) { this._isPanel = value; if (this._card) this._applyHeight(); }
+  get isPanel() { return this._isPanel; }
+
   static getStubConfig() { return {}; }
   getCardSize() { return 12; }
   getGridOptions() { return { columns: "full", rows: "auto" }; }
@@ -180,12 +184,16 @@ class SmartSMSMessagesCard extends HTMLElement {
   /* ---------- rendering ---------- */
 
   _render() {
-    // A panel view (isPanel) gets the whole screen; elsewhere a fixed height, or the card's own
-    this._card.style.height = this._config.height || (this.isPanel ? "calc(100dvh - var(--header-height, 56px) - 16px)" : "600px");
+    this._applyHeight();
     this._renderList();
     this._renderConvo();
     this._layout();
     this._markRead();
+  }
+
+  _applyHeight() {
+    // A panel view gets the whole screen; elsewhere a fixed height, or the card's own
+    this._card.style.height = this._config.height || (this._isPanel ? "calc(100dvh - var(--header-height, 56px) - 16px)" : "600px");
   }
 
   _layout() {
