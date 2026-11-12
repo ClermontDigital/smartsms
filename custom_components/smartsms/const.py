@@ -30,9 +30,16 @@ BINARY_SENSOR_NEW_MESSAGE: Final = "new_message"
 # Event types
 EVENT_MESSAGE_RECEIVED: Final = "smartsms_message_received"
 EVENT_KEYWORD_MATCHED: Final = "smartsms_keyword_matched"
+EVENT_MESSAGE_SENT: Final = "smartsms_message_sent"
 
-# Internal dispatcher signal, formatted with the config entry id
+# Internal dispatcher signals: a message was received (formatted with the config
+# entry id), and the message history or contacts changed (any entry)
 SIGNAL_MESSAGE_STORED: Final = "smartsms_message_stored_{}"
+SIGNAL_HISTORY_UPDATED: Final = "smartsms_history_updated"
+
+# Messages card, served by the integration
+CARD_FILENAME: Final = "smartsms-messages-card.js"
+CARD_URL: Final = f"/{DOMAIN}/{CARD_FILENAME}"
 
 # Storage
 STORAGE_VERSION: Final = 1
@@ -42,6 +49,8 @@ STORAGE_SAVE_DELAY: Final = 10  # seconds
 BINARY_SENSOR_RESET_DELAY: Final = 5  # seconds
 SENSOR_STATE_MAX_LENGTH: Final = 255  # HA rejects longer states
 INBOUND_BODY_MAX_LENGTH: Final = 1000
+HISTORY_MAX: Final = 500  # messages kept for the messages card, oldest dropped first
+CONTACT_NAME_MAX_LENGTH: Final = 40
 WEBHOOK_MAX_BYTES: Final = 10000
 
 # Mobile Message webhook payload keys

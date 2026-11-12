@@ -25,6 +25,7 @@ from .const import (
     CONF_API_USERNAME,
     CONF_DEFAULT_SENDER,
     DOMAIN,
+    EVENT_MESSAGE_SENT,
     MAX_MESSAGE_LENGTH,
     MM_API_BASE_URL,
     MM_SEND_ENDPOINT,
@@ -75,8 +76,19 @@ def async_register_services(hass: HomeAssistant) -> None:
                 f"The message is {len(message)} characters; the maximum is {MAX_MESSAGE_LENGTH}"
             )
 
-        result = await _async_send_sms_api(
-            hass, entry, to_number, message, sender, call.data.get("custom_ref", "")
+        # Logged either way for the messages card; validation failures above aren't
+        store = entry.runtime_data
+        sent_by = await _user_name(hass, call.context.user_id)
+        try:
+            result = await _async_send_sms_api(
+                hass, entry, to_number, message, sender, call.data.get("custom_ref", "")
+            )
+        except HomeAssistantError as err:
+            store.async_log_sent(to_number, message, sender=sender, sent_by=sent_by, error=str(err))
+            raise
+        store.async_log_sent(to_number, message, sender=sender, sent_by=sent_by, result=result)
+        hass.bus.async_fire(
+            EVENT_MESSAGE_SENT, {**result, "body": message}, context=call.context
         )
         return result if call.return_response else None
 
@@ -93,6 +105,14 @@ def async_register_services(hass: HomeAssistant) -> None:
 def async_unregister_services(hass: HomeAssistant) -> None:
     """Remove the send action."""
     hass.services.async_remove(DOMAIN, SERVICE_SEND_SMS)
+
+
+async def _user_name(hass: HomeAssistant, user_id: str | None) -> str | None:
+    """Who sent it from the frontend (none for automations)."""
+    if not user_id:
+        return None
+    user = await hass.auth.async_get_user(user_id)
+    return user.name if user and not user.system_generated else None
 
 
 def _loaded_entry(hass: HomeAssistant) -> ConfigEntry:

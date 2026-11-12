@@ -2,7 +2,7 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![HACS Badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
-[![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](https://github.com/ClermontDigital/smartsms)
+[![Version](https://img.shields.io/badge/version-1.1.0-green.svg)](https://github.com/ClermontDigital/smartsms)
 
 Two-way SMS integration for Home Assistant using [Mobile Message API](https://mobilemessage.com.au/). Receive SMS via real-time webhooks and send SMS using the API.
 
@@ -10,6 +10,7 @@ Two-way SMS integration for Home Assistant using [Mobile Message API](https://mo
 
 - 📱 **Receive SMS** - Real-time webhooks via Home Assistant Cloud
 - 📤 **Send SMS** - `smartsms.send_sms` action; raises an error if Mobile Message doesn't accept the message, and can return the message ID and cost
+- 💬 **Messages card** - Conversations in and out, reply or start a new message, name your contacts (admins only)
 - 🔧 **Entities** - Last message, sender, count, and new message sensors (kept across restarts)
 - 🎯 **Filtering** - Allow/block lists of senders and keyword matching, set under **Configure**
 - 🚀 **Events** - Fire automations on message received or keyword matched
@@ -42,9 +43,27 @@ Two-way SMS integration for Home Assistant using [Mobile Message API](https://mo
 
 ## Usage
 
+### Messages card
+SmartSMS keeps the last 500 messages, received and sent, and serves a Lovelace card to read and answer them.
+The card's resource is added for you; put it on a dashboard with:
+
+```yaml
+type: custom:smartsms-messages-card
+height: 600px  # optional; a panel view gets the whole screen
+```
+
+- Conversations are grouped by number (`04xx`, `+614xx` and `614xx` are the same person). Name a number with the
+  person button at the top of its conversation.
+- Everything sent through `smartsms.send_sms` is listed, from the card, automations or scripts, including messages
+  Mobile Message refused (with its reason). The counter under the text box shows how many SMS parts it will cost.
+- **Only Home Assistant administrators can read the history and contact names.** They're served by an admin-only
+  WebSocket API (`smartsms/history`, `smartsms/subscribe`, `smartsms/contact_set`) and never put in entity
+  attributes, which every user can read. Pair the card with a dashboard that only admins can open.
+
 ### Events
 - `smartsms_message_received` — every accepted SMS; data: `body`, `sender`, `to_number`, `timestamp`, `message_sid`, `provider`
 - `smartsms_keyword_matched` — same data (both events carry `matched_keywords` when a keyword matched)
+- `smartsms_message_sent` — every SMS Mobile Message accepted; data: `body`, `to`, `sender`, `message_id`, `cost`
 
 Message text is passed through as received, line breaks included (complete HTML entities such as `&amp;` are decoded); entity states are the one-line form.
 

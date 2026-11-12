@@ -2,19 +2,23 @@
   "domain": "smartsms",
   "name": "SmartSMS",
   "after_dependencies": [
-    "cloud"
+    "cloud",
+    "frontend",
+    "lovelace"
   ],
   "codeowners": [
     "@developersteve"
   ],
   "config_flow": true,
   "dependencies": [
-    "webhook"
+    "http",
+    "webhook",
+    "websocket_api"
   ],
   "documentation": "https://github.com/ClermontDigital/smartsms",
   "integration_type": "service",
   "iot_class": "cloud_push",
   "issue_tracker": "https://github.com/ClermontDigital/smartsms/issues",
   "requirements": [],
-  "version": "1.0.0"
+  "version": "1.1.0"
 }

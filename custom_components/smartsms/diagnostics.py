@@ -55,4 +55,7 @@ async def async_get_config_entry_diagnostics(
         "keyword_count": len(entry.options.get(CONF_KEYWORDS) or []),
         "message_count": store.message_count if store else None,
         "latest_message": async_redact_data(store.latest_message, TO_REDACT) if store else None,
+        # Counts only: the history and contact names are numbers and message contents
+        "history_count": len(store.history) if store else None,
+        "contact_count": len(store.contacts) if store else None,
     }

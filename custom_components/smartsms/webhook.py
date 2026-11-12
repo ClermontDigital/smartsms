@@ -159,7 +159,7 @@ def _clean_message_body(body: str) -> str:
     return _ENTITY.sub(lambda m: html.unescape(m.group(0)), body).strip()
 
 
-def _normalise_sender(sender: str) -> str:
+def normalise_number(sender: str) -> str:
     """Comparable form: numbers as 61xxxxxxxxx digits, alphanumeric IDs casefolded."""
     sender = sender.strip()
     if not _PHONE.match(sender):
@@ -174,11 +174,11 @@ def _normalise_sender(sender: str) -> str:
 
 def _should_process_message(entry: ConfigEntry, sender: str) -> bool:
     """Apply the sender allow list, then the block list."""
-    sender_n = _normalise_sender(sender)
-    allow = {_normalise_sender(n) for n in _option(entry, CONF_SENDER_WHITELIST)}
+    sender_n = normalise_number(sender)
+    allow = {normalise_number(n) for n in _option(entry, CONF_SENDER_WHITELIST)}
     if allow and sender_n not in allow:
         return False
-    block = {_normalise_sender(n) for n in _option(entry, CONF_SENDER_BLACKLIST)}
+    block = {normalise_number(n) for n in _option(entry, CONF_SENDER_BLACKLIST)}
     return sender_n not in block
 
 
